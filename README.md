@@ -20,3 +20,27 @@ git config --global user.name "FirstName LastName"
 
 More info can be found here: https://www.jetbrains.com/help/idea/set-up-a-git-repository.html
 
+## Branching and changes
+1. Create a new branch
+```
+git checkout -b 'branchName'
+```
+
+2. Afterwards, you can start making your changes and codes 
+3. Once you're ready to commit, go to the sidebar and click the commit button (Alt+0)
+4. Select the files you want to commit + write your commit message
+5. Choose either:
+   - 'Commit' your changes locally (i.e. changes are only on your device)
+     - You can later use 'git push' to push commits to remote branches
+
+   - 'Commit and push' to push your changes to the remote branch (where you can create a pull request)
+
+## Pull Requests
+The visually easiest way is to go to this repo on github. 
+
+If you recently push a commit to the remote branch, you'll recieve a yellow banner asking if you want to create a pull request
+
+In the event you don't see this prompt, you can still create a pull request by doing the following on github:
+1. In the 'Code' page, select 'Branches'
+![img.png](img.png)
+2. Under 'Your branches' select the branch you want to create a pull request for
