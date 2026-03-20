@@ -57,6 +57,12 @@ In the event you don't see this prompt, you can still create a pull request by d
 ![img.png](img.png)
 2. Under 'Your branches' select the branch you want to create a pull request for
 
+### Important note regarding merged PRs
+> Branches of merged PRs are deleted automatically.  
+> To avoid potential issues or complication, always create a new branch for future commits. <br>
+> Avoid attempting to commit to a deleted branch (it won't necessarily break anything, but will take a while to figure out).
+
+
 ## Updating your repository after a pull request
 To get the latest version of the code, switch back to the  `main`   branch and run:
 ```
@@ -68,3 +74,18 @@ Afterwards, you can also update your branches to use the latest version of the c
 git rebase main
 ```
 This is primarily to stop potential merge conflicts and resolve them before the pull requests.
+
+## Other useful git commands
+Need to switch branch but can't because git is asking you to commit?
+Not ready to commit your changes yet?
+Use
+```
+git stash
+```
+to save your changes locally. After stashing uncommitted changes will be removed from the code.
+
+To get your changes back:
+```
+git stash pop
+```
+More on this: https://www.w3schools.com/git/git_stash.asp
