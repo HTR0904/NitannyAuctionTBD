@@ -22,16 +22,20 @@ More info can be found here: https://www.jetbrains.com/help/idea/set-up-a-git-re
 
 ---
 ## Setting Up Flask 
-Flask likely won't be set up when you initial clone the repo. To set it up, please naviagte to the following on the top menu:
+Flask likely won't be set up when you initial clone the repo. 
 
-![img_1.png](img_1.png)
+To set it up, please naviagte to the following on the top menu and select **Edit Configurations**:
+
+![img_1.png](static/images/readMe/img_1.png)
+
+Locate Flask server on the sidebar and select it.
 
 Once you are here, you will want to:
 1. Select your python
 2. Select `script` and locate this project's `app.py` file
 3. Set your working directory to point to this project's folder as shown below:
 
-![img_2.png](img_2.png)
+![img_2.png](static/images/readMe/img_2.png)
 
 Afterwards, you can test whether everything is working by attempting to run the project.
 
@@ -66,7 +70,7 @@ As a note: the main branch is called `main`
 The visually easiest way is to go to this repo on github. 
 
 If you recently push a commit to the remote branch, you'll recieve a yellow banner asking if you want to create a pull request
-![img.png](img.png)
+![img.png](static/images/readMe/img.png)
 
 In the event you don't see this prompt, you can still create a pull request by doing the following on github:
 1. In the 'Code' page, select 'Branches'
