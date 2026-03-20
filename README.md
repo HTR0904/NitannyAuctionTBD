@@ -1,8 +1,11 @@
 # Nitanny Auction
 
 ## Context
-Nitanny Auction is an online platform designed to
+Nittany Auction is an online platform designed to connect 
+buyers and sellers through an auction system. 
+Users can list products, place bids, track watched items, and communicate directly with sellers.
 
+The platform supports multiple account roles: Bidders, Sellers, Helpdesk Staff.
 
 ## Features
 TBD
