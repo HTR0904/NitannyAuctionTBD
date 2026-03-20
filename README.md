@@ -20,6 +20,22 @@ git config --global user.name "FirstName LastName"
 
 More info can be found here: https://www.jetbrains.com/help/idea/set-up-a-git-repository.html
 
+---
+## Setting Up Flask 
+Flask likely won't be set up when you initial clone the repo. To set it up, please naviagte to the following on the top menu:
+
+![img_1.png](img_1.png)
+
+Once you are here, you will want to:
+1. Select your python
+2. Select `script` and locate this project's `app.py` file
+3. Set your working directory to point to this project's folder as shown below:
+
+![img_2.png](img_2.png)
+
+Afterwards, you can test whether everything is working by attempting to run the project.
+
+---
 ## Branching and changes
 The repository is setup so that you will always have to commit to a branch first and make a pull request before your changes can be merged onto the main branch.
 
