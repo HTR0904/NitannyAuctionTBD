@@ -50,11 +50,10 @@ As a note: the main branch is called `main`
 The visually easiest way is to go to this repo on github. 
 
 If you recently push a commit to the remote branch, you'll recieve a yellow banner asking if you want to create a pull request
-![img_1.png](img_1.png)
+![img.png](img.png)
 
 In the event you don't see this prompt, you can still create a pull request by doing the following on github:
 1. In the 'Code' page, select 'Branches'
-![img.png](img.png)
 2. Under 'Your branches' select the branch you want to create a pull request for
 
 ### Important note regarding merged PRs
