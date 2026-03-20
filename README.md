@@ -21,6 +21,11 @@ git config --global user.name "FirstName LastName"
 More info can be found here: https://www.jetbrains.com/help/idea/set-up-a-git-repository.html
 
 ## Branching and changes
+The repository is setup so that you will always have to commit to a branch first and make a pull request before your changes can be merged onto the main branch.
+
+Pycharm automatically takes care of this for you by creating a ne branch if you attempt to commit on the main branch. However if you prefer more control of how your branches:
+
+
 1. Create a new branch
 ```
 git checkout -b 'branchName'
@@ -35,12 +40,31 @@ git checkout -b 'branchName'
 
    - 'Commit and push' to push your changes to the remote branch (where you can create a pull request)
 
+### Other useful branch codes
+Switching branches
+```
+git checkout "branchName"
+```
+As a note: the main branch is called `main`
 ## Pull Requests
 The visually easiest way is to go to this repo on github. 
 
 If you recently push a commit to the remote branch, you'll recieve a yellow banner asking if you want to create a pull request
+![img_1.png](img_1.png)
 
 In the event you don't see this prompt, you can still create a pull request by doing the following on github:
 1. In the 'Code' page, select 'Branches'
 ![img.png](img.png)
 2. Under 'Your branches' select the branch you want to create a pull request for
+
+## Updating your repository after a pull request
+To get the latest version of the code, switch back to the  `main`   branch and run:
+```
+git pull
+```
+
+Afterwards, you can also update your branches to use the latest version of the codebase, by switch to the branch you are working on and run:
+```
+git rebase main
+```
+This is primarily to stop potential merge conflicts and resolve them before the pull requests.
