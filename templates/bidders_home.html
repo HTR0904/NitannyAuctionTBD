@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
+          integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+
+    <title>Home</title>
+
+    <style>
+        .bg-navy { background-color: #041E42; }
+        .text-navy { color: #041E42; }
+        .btn-navy { background-color: #041E42; color: white; border: none; }
+
+        /* Explicitly size the profile picture in the navbar */
+        .navbar-profile-pic {
+            width: 32px;
+            height: 32px;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<!-- Nav bar on top -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-navy">
+    <div class="container">
+        <a class="navbar-brand font-weight-bold" href="/home">Nittany Auction</a>
+
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarContent">
+
+            <form class="form-inline mx-auto my-2 my-lg-0">
+                <input class="form-control mr-sm-2" type="search" name="query" placeholder="Search" aria-label="Search" style="width: 350px">
+                <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Search</button>
+            </form>
+
+            <ul class="navbar-nav align-items-center">
+                <li class="nav-item">
+                    <a class="nav-link" href="/view_bids">View Bids</a>
+                </li>
+                <li class="nav-item mr-3">
+                    <a class="nav-link" href="/contact">Contact Us</a>
+                </li>
+
+                <li class="nav-item mr-3">
+                    <a class="nav-link" href="/notifications" title="Notifications">
+                         <!-- Notification icon from bootstrap -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bell" viewBox="0 0 16 16">
+                        <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6"/>
+                        </svg>
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link" href="#" id="profileDropdown">
+                        <!-- Default profile image -->
+                        <img src="https://static.vecteezy.com/system/resources/thumbnails/009/292/244/small/default-avatar-icon-of-social-media-user-vector.jpg" class="rounded-circle mr-1 navbar-profile-pic" alt="Profile"> Profile
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<!--Remainder of homepage-->
+<div class="container mt-5">
+
+    <!--Hero element-->
+    <div class="jumbotron bg-white shadow-sm border text-center py-5 mb-5">
+        <h1 class=" text-navy font-weight-bold">Welcome to the Marketplace</h1>
+        <p class="lead text-muted mt-3">Buy, sell, and bid on items within the university and local community.</p>
+        <hr>
+        <p>Get started now</p>
+        <a class="btn btn-navy btn-lg px-4 mr-2" href="/search" role="button">Browse Categories</a>
+    </div>
+
+    <!-- Auction recommendation -->
+    <h3 class="text-navy font-weight-bold mb-4">Trending Auctions</h3>
+    <div class="row">
+
+        <div class="col">
+            <div class="card h-100">
+                <div class="card-body text-center d-flex flex-column">
+                    <h5 class="card-title font-weight-bold">Item 1</h5>
+                    <h4 class="text-navy my-3">Bid Amount</h4>
+                    <p>Item Description</p>
+                    <a class="btn btn-outline-primary btn-block">View Auction</a>
+                </div>
+                <div class="card-footer text-center">
+                    Auction end time
+                </div>
+            </div>
+        </div>
+
+         <div class="col">
+            <div class="card h-100">
+                <div class="card-body text-center d-flex flex-column">
+                    <h5 class="card-title font-weight-bold">Item 2</h5>
+                    <h4 class="text-navy my-3">Bid Amount</h4>
+                    <p>Item Description</p>
+                    <a class="btn btn-outline-primary btn-block">View Auction</a>
+                </div>
+                <div class="card-footer text-center">
+                    Auction end time
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card h-100">
+                <div class="card-body text-center d-flex flex-column">
+                    <h5 class="card-title font-weight-bold">Item 3</h5>
+                    <h4 class="text-navy my-3">Bid Amount</h4>
+                    <p>Item Description</p>
+                    <a class="btn btn-outline-primary btn-block">View Auction</a>
+                </div>
+                <div class="card-footer text-center">
+                    Auction end time
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"
+        integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
+        integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo"
+        crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"
+        integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6"
+        crossorigin="anonymous"></script>
+</body>
+</html>

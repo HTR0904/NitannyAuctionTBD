@@ -29,9 +29,20 @@
     </div>
 </div>
 
+<!-- Error Banner for failed logins -->
+{% if error %}
+<div class="container">
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>Error:</strong> {{ error }}
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span> <!-- Close button -->
+        </button>
+    </div>
+</div>
+{% endif %}
+
 
 <!-- Login Portals -->
-
 <div class="container">
     <div class = "row">
 

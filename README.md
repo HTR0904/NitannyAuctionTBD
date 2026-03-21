@@ -29,4 +29,7 @@ Project_Root/
 ## Contributing to the Repo (through Github)
 For instructions on how to set up this project on your device, 
 along with some useful commands and guidelines when working with git, 
-please visit the  [set up page](setup.md)
+please visit the  [set-up page](setup.md)
+
+## Resources Used
+Links to all resources used in the process of website creation [resources page](resources.md)
