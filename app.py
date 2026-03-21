@@ -14,14 +14,14 @@ def hash_password(password):
 @app.route('/')
 def index():
     # Renders the login page
-    return render_template('login.html')
+    return render_template('bidders_home.html')
 
 @app.route('/login_user', methods=['POST'])
 def login_user():
     username = request.form.get('user_email')
     password = request.form.get('user_password')
 
-    conn = sql.connect("auction.db")
+    conn = sql.connect("dataset_tables.db")
     cursor = conn.cursor()
 
     '''
@@ -58,7 +58,7 @@ def login_helpdesk():
     helpdesk_username = request.form.get('helpdesk_email')
     helpdesk_password = request.form.get('helpdesk_password')
 
-    conn = sql.connect("auction.db")
+    conn = sql.connect("dataset_tables.db")
     cursor = conn.cursor()
 
     '''
@@ -88,6 +88,10 @@ def login_helpdesk():
     else:
         # Else, if account exists with these credential but is not a helpdesk staff (i.e. this is a regular user). Throw an error:
         return render_template('login.html', error="Not a helpdesk account")
+
+@app.route('/bidder')
+def bidder():
+    return render_template('bidders_home.html')
 
 if __name__ == '__main__':
     #app.run()
