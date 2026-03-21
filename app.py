@@ -51,7 +51,7 @@ def login_user():
         return redirect('/seller')
     else:
         # Else, if account exists with these credential exists but no valid accounts type found (i.e. a helpdesk staff). Throw an error:
-        return render_template('login.html')
+        return render_template('login.html', error="Not a valid user account")
 
 @app.route('/login_helpdesk', methods=['POST'])
 def login_helpdesk():
@@ -87,7 +87,7 @@ def login_helpdesk():
         return redirect('/helpdesk')
     else:
         # Else, if account exists with these credential but is not a helpdesk staff (i.e. this is a regular user). Throw an error:
-        return render_template('login.html')
+        return render_template('login.html', error="Not a helpdesk account")
 
 if __name__ == '__main__':
     #app.run()
