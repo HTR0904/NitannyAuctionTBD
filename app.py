@@ -1,22 +1,16 @@
 from flask import Flask, render_template, request, redirect, url_for
 import sqlite3 as sql
+import hashlib
 
 app = Flask(__name__)
 
-#Allows html pages to be updated by refreshing without having to rerun the code
+#Allows HTML pages to be updated by refreshing without having to rerun the code
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 host = 'http://127.0.0.1:5000/'
 
-
-'''
-TODO: 
-- add DB connection
-- add logic for handling different logins
-
-'''
-
-
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 @app.route('/')
 def index():
     # Renders the login page
@@ -27,25 +21,73 @@ def login_user():
     username = request.form.get('user_email')
     password = request.form.get('user_password')
 
-    #check if credentials match, if not return an error like  "Invalid username or password."
+    conn = sql.connect("auction.db")
+    cursor = conn.cursor()
 
-    #Check user account type (bidder or seller) and determine which html page to redirect them to it:
+    '''
+    Commented out until db implemented
+    cursor.execute("""
+                   SELECT password_hash, role
+                   FROM user_login
+                   WHERE email = ?
+                   """, (username,))
+    '''
+    user = cursor.fetchone()
+    conn.close()
 
-    #Else, if account exists with these credential exists but no valid accounts type found (i.e. a helpdesk staff). Throw an error:
-    return render_template('login.html')
+    # check if credentials match, if not return an error like  "Invalid username or password."
+    if user is None:
+        return render_template('login.html', error="Invalid username or password")
+
+    stored_hash, role = user
+
+    if hash_password(password) != stored_hash:
+        return render_template('login.html', error="Invalid username or password")
+
+    # Check user account type (bidder or seller) and determine which HTML page to redirect them to it:
+    if role == "bidder":
+        return redirect('/bidder')
+    elif role == "seller":
+        return redirect('/seller')
+    else:
+        # Else, if account exists with these credential exists but no valid accounts type found (i.e. a helpdesk staff). Throw an error:
+        return render_template('login.html')
 
 @app.route('/login_helpdesk', methods=['POST'])
-def login_user():
+def login_helpdesk():
     helpdesk_username = request.form.get('helpdesk_email')
     helpdesk_password = request.form.get('helpdesk_password')
 
-    #check if credentials match, if not return an error
+    conn = sql.connect("auction.db")
+    cursor = conn.cursor()
 
-    #Check user account type is a helpdesk account then redirect them to the html page.
+    '''
+    Commented out until db implemented
+    cursor.execute("""
+                   SELECT password_hash, role
+                   FROM user_login
+                   WHERE email = ?
+                   """, (helpdesk_username,))
 
-    #Else, if account exists with these credential but is not a helpdesk staff (i.e. this is a regular user). Throw an error:
-    return render_template('login.html')
+    '''
+    user = cursor.fetchone()
+    conn.close()
 
+    if user is None:
+        return render_template('login.html', error="Invalid login")
+
+    stored_hash, role = user
+
+    # check if credentials match, if not return an error
+    if hash_password(helpdesk_password) != stored_hash:
+        return render_template('login.html', error="Invalid login")
+
+    # Check user account type is a helpdesk account then redirect them to the HTML page.
+    if role == "helpdesk":
+        return redirect('/helpdesk')
+    else:
+        # Else, if account exists with these credential but is not a helpdesk staff (i.e. this is a regular user). Throw an error:
+        return render_template('login.html')
 
 if __name__ == '__main__':
     #app.run()
