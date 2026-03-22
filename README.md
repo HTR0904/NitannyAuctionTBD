@@ -15,18 +15,43 @@ TBD
 Project_Root/
 ├── app.py                    # Main Python/Flask application
 ├── README.md                 # Project documentation
+├── resources.md              # Documentation of resources used for project
 ├── setup.md                  # Project setup instructions and guidelines
 ├── templates/                # HTML frontend files
 │   ├── login.html            # Main login page
+│   ├── seller_home.html      # Main homepage for sellers
+│   ├── helpdesk_home.html    # Main homepage for helpdesk
 │   └── bidders_home.html     # Main homepage for bidders
 └── static/                   # Static assets
     └── images/               # Image files
         └── docs/             # Images used for README pages
 
 ```
+---
+
+## Instructions on how to run the code
+
+### Prerequisites
+* PyCharm Pro 
+* Python 3.x installed
+
+### Loading the Files into PyCharm Professional
+1. Open PyCharm Professional.
+2. Select File > Open and select the project folder containing app.py.
+3. PyCharm should automatically detect the Flask environment. If prompted to create a virtual environment, select Yes.
+
+### Running the Code
+1. Open app.py in the editor.
+2. Click the Run button (green arrow) or right-click within app.py and select Run 'app'.
+   (*Notice: On the first run, the terminal may prompt you to install the Flask module. Please do so then try running the app again.*)
+3. The terminal will display a local link (currently set as http://127.0.0.1:5000/).
+4. Click the link to open the Nittany Auction login portal in your browser.
+
 
 ---
 ## Contributing to the Repo (through Github)
+> This section is for team members' reference
+
 For instructions on how to set up this project on your device, 
 along with some useful commands and guidelines when working with git, 
 please visit the  [set-up page](setup.md)
