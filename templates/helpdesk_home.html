@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
+          integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+
+    <title>HelpDesk Home</title>
+
+    <style>
+        .bg-navy { background-color: #041E42; }
+        .text-navy { color: #041E42; }
+        .btn-navy { background-color: #041E42; color: white; border: none; }
+
+        .navbar-profile-pic {
+            width: 32px;
+            height: 32px;
+            object-fit: cover;
+        }
+
+        .helpdesk-block {
+            background-color: white;
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            box-shadow: 0 .125rem .25rem rgba(0,0,0,.075);
+        }
+
+        .table th, .table td {
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-navy">
+    <div class="container">
+        <a class="navbar-brand font-weight-bold" href="/helpdesk">Nittany Auction</a>
+
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent" aria-controls="#navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarContent">
+
+            <form class="form-inline mx-auto my-2 my-lg-0">
+                <input class="form-control mr-sm-2" type="search" name="query" placeholder="Search" aria-label="Search" style="width: 350px">
+                <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Search</button>
+            </form>
+
+            <ul class="navbar-nav align-items-center">
+                <li class="nav-item">
+                    <a class="nav-link" href="#">Admin Tools</a>
+                </li>
+                <li class="nav-item mr-3">
+                    <a class="nav-link" href="/contact">Contact Us</a>
+                </li>
+
+                <li class="nav-item mr-3">
+                    <a class="nav-link" href="/notifications" title="Notifications">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bell" viewBox="0 0 16 16">
+                            <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6"/>
+                        </svg>
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a class="nav-link" href="#" id="profileDropdown">
+                        <img src="https://static.vecteezy.com/system/resources/thumbnails/009/292/244/small/default-avatar-icon-of-social-media-user-vector.jpg" class="rounded-circle mr-1 navbar-profile-pic" alt="Profile"> Profile
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-5">
+
+    <div class="jumbotron bg-white shadow-sm border text-center py-5 mb-5">
+        <h1 class="text-navy font-weight-bold">HelpDesk Dashboard</h1>
+        <p class="lead text-muted mt-3">Review account changes, update roles, add categories, and look over basic market data.</p>
+        <hr>
+        <p class="mb-4">This page brings the main HelpDesk tools together in one spot.</p>
+        <a class="btn btn-navy btn-lg px-4 mr-2" href="#" role="button">Open Admin Tools</a>
+    </div>
+
+    <div class="helpdesk-block p-4 mb-5">
+        <h3 class="text-navy font-weight-bold mb-3">Change a User ID</h3>
+        <p class="text-muted">Use this section when a user needs their ID information updated.</p>
+
+        <form>
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label>Current User ID</label>
+                    <input type="text" class="form-control" placeholder="Enter current user ID">
+                </div>
+                <div class="form-group col-md-6">
+                    <label>New User ID</label>
+                    <input type="text" class="form-control" placeholder="Enter new user ID">
+                </div>
+            </div>
+            <button type="button" class="btn btn-navy">Update User ID</button>
+        </form>
+    </div>
+
+    <div class="helpdesk-block p-4 mb-5">
+        <h3 class="text-navy font-weight-bold mb-3">Change Account Type</h3>
+        <p class="text-muted">HelpDesk staff can update a user's role if their account needs to be changed.</p>
+
+        <form>
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label>User ID</label>
+                    <input type="text" class="form-control" placeholder="Enter user ID">
+                </div>
+                <div class="form-group col-md-6">
+                    <label>New Account Type</label>
+                    <select class="form-control">
+                        <option selected>Select account type</option>
+                        <option>Bidder</option>
+                        <option>Seller</option>
+                        <option>HelpDesk</option>
+                    </select>
+                </div>
+            </div>
+            <button type="button" class="btn btn-navy">Change Account Type</button>
+        </form>
+    </div>
+
+    <div class="helpdesk-block p-4 mb-5">
+        <h3 class="text-navy font-weight-bold mb-3">Add a Product Category</h3>
+        <p class="text-muted">If the current category list is missing something, a new one can be added here.</p>
+
+        <form>
+            <div class="form-group">
+                <label>Category Name</label>
+                <input type="text" class="form-control" placeholder="Enter new category name">
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea class="form-control" rows="3" placeholder="Write a short description for the new category"></textarea>
+            </div>
+
+            <button type="button" class="btn btn-navy">Add Category</button>
+        </form>
+    </div>
+
+    <div class="helpdesk-block p-4 mb-5">
+        <h3 class="text-navy font-weight-bold mb-3">Market Analysis</h3>
+        <p class="text-muted">This sample table gives a quick summary of listings and auction results by category.</p>
+
+        <table class="table table-bordered table-hover bg-white">
+            <thead class="thead-light">
+                <tr>
+                    <th>Category</th>
+                    <th>Total Listings</th>
+                    <th>Completed Auctions</th>
+                    <th>Average Final Price</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Books</td>
+                    <td>12</td>
+                    <td>9</td>
+                    <td>$38.50</td>
+                </tr>
+                <tr>
+                    <td>Electronics</td>
+                    <td>7</td>
+                    <td>5</td>
+                    <td>$122.00</td>
+                </tr>
+                <tr>
+                    <td>Furniture</td>
+                    <td>5</td>
+                    <td>4</td>
+                    <td>$76.25</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"
+        integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
+        integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo"
+        crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"
+        integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6"
+        crossorigin="anonymous"></script>
+</body>
+</html>
