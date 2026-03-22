@@ -8,7 +8,25 @@ Users can list products, place bids, track watched items, and communicate direct
 The platform supports multiple account roles: Bidders, Sellers, Helpdesk Staff.
 
 ## Features
-TBD
+### User Authentication
+
+Uses Python with SQLite to handle user login against the database.
+
+The system looks up the user by email in the table where login credentials are stored.
+If no matching user is found, an error message is returned.
+
+If a match is found, the stored password hash is retrieved and compared against
+the SHA-256 hash of the input password.
+If the hashes do not match, login fails.
+
+If they match, the user is redirected based on their role:
+- Bidders → `/bidder`
+- Sellers → `/seller`
+- Helpdesk staff → `/helpdesk`
+
+An error is shown if the role is not recognized.
+
+Passwords are never stored as plain text and hashing is used throughout to improve security.
 
 ## Organization
 ```text
