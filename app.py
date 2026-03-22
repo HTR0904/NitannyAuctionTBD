@@ -93,6 +93,14 @@ def login_helpdesk():
 def bidder():
     return render_template('bidders_home.html')
 
+@app.route('/seller')
+def bidder():
+    return render_template('seller_home.html')
+
+@app.route('/helpdesk')
+def bidder():
+    return render_template('helpdesk_home.html')
+
 if __name__ == '__main__':
     #app.run()
     app.run(debug=True)  #enabled to run with TEMPLATES_AUTO_RELOAD
