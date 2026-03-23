@@ -28,6 +28,25 @@ An error is shown if the role is not recognized.
 
 Passwords are never stored as plain text and hashing is used throughout to improve security.
 
+### Bidder homepage
+
+This page visualizes three main functionalities that are mentioned in our report (phase 1):
+- Feature trending auctions to bidders
+- Allows browsing of products and listings
+- View current bids participated in
+
+As of right now, it only shows visual part without actual function.
+
+### Seller homepage
+
+This page visualizes four main functionalities that are mentioned from phase 1 report. 
+- List of products including details, category, hidden reserve price, and auction stop time
+- Management of seller's listings
+- Request to additional category
+- Automated payment receive 
+
+As of right now, it only shows visual part without actual function. (shown data from current page is manualy typed into html file instead of linking with actual database)
+
 ### Helpdesk homepage
 
 This page visualizes four main functionalities that are mentioned in our report (phase 1):
@@ -38,16 +57,6 @@ This page visualizes four main functionalities that are mentioned in our report 
 
 As of right now, it only shows visual part without actual function.
 
-
-### Seller homepage
-
-This page visualizes four main functionalities that are mentioned from phase 1 report. 
-- List of products including details, category, hidden reserve price, and auction stop time
-- management of seller's listings
-- Request to additional category
-- Automated payment receive 
-
-As of right now, it only shows visual part without actual function. (shown data from current page is manualy typed into html file instead of linking with actual database)
 
 ## Organization
 ```text
