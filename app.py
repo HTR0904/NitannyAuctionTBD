@@ -1,12 +1,15 @@
 from urllib.parse import urlparse
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, session, url_for
 import sqlite3 as sql
 import hashlib
 
 app = Flask(__name__)
 
-#Allows HTML pages to be updated by refreshing without having to rerun the code
+# Allows HTML pages to be updated by refreshing without having to rerun the code
 app.config['TEMPLATES_AUTO_RELOAD'] = True
+
+# Required for session to work
+app.secret_key = 'projectTBD_secret_key'
 
 host = 'http://127.0.0.1:5000/'
 
@@ -14,7 +17,22 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 @app.route('/')
 def index():
+    #Checks for session first
+    if 'user_email' in session and 'account_type' in session:
+        # 2. If they do, instantly redirect them to their specific dashboard
+        return redirect(session['account_type'])
     # Renders the login page
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """
+    With session, the browser will now remember login even after we terminate the server
+    Session will remain until you close the browser window
+    In case of errors or to kill the session without logout fully implemented:
+    Type the following into your browser's URL bar: http://127.0.0.1:5000/logout
+    """
+    session.clear()
     return render_template('login.html')
 
 @app.route('/login_bidder', methods=['POST'])
@@ -49,6 +67,10 @@ def login_user():
                    """, (username,))
     if cursor.fetchone():
         conn.close()
+
+        # Needed for session: store the user's email
+        session['user_email'] = username
+        session['account_type'] = '/bidder'
         return redirect('/bidder')
 
     # Else, if account exists with these credential exists but no valid accounts type found (i.e. a helpdesk staff). Throw an error:
@@ -90,6 +112,10 @@ def login_seller():
                    """, (seller_username,))
     if cursor.fetchone():
         conn.close()
+
+        #Needed for session
+        session['user_email'] = seller_username
+        session['account_type'] = '/seller'
         return redirect('/seller')
 
     # Else, if account exists with these credential but is not a helpdesk staff (i.e. this is a regular user). Throw an error:
@@ -131,6 +157,9 @@ def login_helpdesk():
                    """, (helpdesk_username,))
     if cursor.fetchone():
         conn.close()
+        # Needed for session
+        session['user_email'] = helpdesk_username
+        session['account_type'] = '/helpdesk'
         return redirect('/helpdesk')
 
     # Else, if account exists with these credential but is not a helpdesk staff (i.e. this is a regular user). Throw an error:
@@ -141,7 +170,7 @@ def login_helpdesk():
 @app.route('/change_password', methods=['POST'])
 def change_password():
 
-    user_email = "" #TODO: figure out how to get current user_email. Session?
+    user_email = session['user_email']
     current_password = request.form.get('current_password')
     new_password = request.form.get('new_password')
     confirm_new_password = request.form.get('confirm_new_password')
@@ -185,7 +214,7 @@ def change_password():
 @app.route('/submit_ticket', methods=['POST'])
 def submit_ticket():
 
-    sender_email = "palceholder@email.com" #TODO: figure out how to get current user_email. Session?
+    sender_email = session['user_email']
 
     req_type = request.form.get('request_type')
     req_desc = request.form.get('request_desc')
