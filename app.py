@@ -1,8 +1,13 @@
 from urllib.parse import urlparse
-from flask import Flask, flash, render_template, request, redirect, session, url_for
-import sqlite3 as sql
+from flask import Flask, flash, render_template, request, redirect, send_file, session, url_for
+import csv
 import hashlib
+import io
+import sqlite3 as sql
 import uuid
+import zipfile
+from datetime import datetime
+from xml.sax.saxutils import escape
 app = Flask(__name__)
 
 # Allows HTML pages to be updated by refreshing without having to rerun the code
@@ -12,31 +17,372 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.secret_key = 'projectTBD_secret_key'
 
 host = 'http://127.0.0.1:5000/'
+DB_NAME = "dataset_tables.db"
+USERS_TABLE = "app_users"
+CATEGORIES_TABLE = "app_categories"
+TICKETS_TABLE = "app_helpdesk_tickets"
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
+
+def get_connection(row_factory=False):
+    conn = sql.connect(DB_NAME)
+    if row_factory:
+        conn.row_factory = sql.Row
+    return conn
+
+
+def ensure_admin_schema():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.executescript(
+        f"""
+        CREATE TABLE IF NOT EXISTS {USERS_TABLE} (
+            email TEXT PRIMARY KEY,
+            full_name TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('bidder', 'seller', 'helpdesk')),
+            user_status TEXT NOT NULL DEFAULT 'Active',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS {CATEGORIES_TABLE} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT NOT NULL,
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS {TICKETS_TABLE} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_email TEXT NOT NULL,
+            assigned_email TEXT NOT NULL,
+            category_name TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            description TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'Open',
+            priority TEXT NOT NULL DEFAULT 'Medium',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        """
+    )
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    seed_users = [
+        ("bidder@nittanyauction.com", "Campus Bidder", hash_password("password123"), "bidder"),
+        ("seller@nittanyauction.com", "Campus Seller", hash_password("password123"), "seller"),
+        ("helpdesk@nittanyauction.com", "Helpdesk Admin", hash_password("password123"), "helpdesk"),
+    ]
+    for email, full_name, password_hash, role in seed_users:
+        cursor.execute(
+            f"""
+            INSERT OR IGNORE INTO {USERS_TABLE} (email, full_name, password_hash, role, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (email, full_name, password_hash, role, now),
+        )
+
+    seed_categories = [
+        ("Electronics", "Devices, gadgets, and peripherals."),
+        ("Books", "Textbooks, novels, and study materials."),
+        ("Furniture", "Dorm and apartment furniture."),
+        ("Helpdesk", "Account, listing, and system support requests."),
+    ]
+    for name, description in seed_categories:
+        cursor.execute(
+            f"""
+            INSERT OR IGNORE INTO {CATEGORIES_TABLE} (name, description, created_by, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (name, description, "helpdesk@nittanyauction.com", now),
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def resolve_full_name(email):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT first_name, last_name FROM Bidders WHERE email = ?", (email,))
+        bidder = cursor.fetchone()
+        if bidder:
+            first_name = bidder[0] or ""
+            last_name = bidder[1] or ""
+            name = f"{first_name} {last_name}".strip()
+            if name:
+                return name
+    except sql.Error:
+        pass
+    finally:
+        conn.close()
+    return email.split("@")[0].replace(".", " ").title()
+
+
+def ensure_app_user(email, role):
+    ensure_admin_schema()
+    conn = get_connection(row_factory=True)
+    cursor = conn.cursor()
+    try:
+        password_row = cursor.execute(
+            "SELECT password_hash FROM User_Login WHERE email = ?",
+            (email,),
+        ).fetchone()
+        password_hash = password_row["password_hash"] if password_row else hash_password("password123")
+        cursor.execute(
+            f"""
+            INSERT OR IGNORE INTO {USERS_TABLE} (email, full_name, password_hash, role, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                email,
+                resolve_full_name(email),
+                password_hash,
+                role,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            ),
+        )
+        cursor.execute(
+            f"UPDATE {USERS_TABLE} SET role = ? WHERE email = ?",
+            (role, email),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_app_user(email):
+    ensure_admin_schema()
+    conn = get_connection(row_factory=True)
+    user = conn.execute(f"SELECT * FROM {USERS_TABLE} WHERE email = ?", (email,)).fetchone()
+    conn.close()
+    return user
+
+
+def authenticate_app_user(email, password, role):
+    user = get_app_user(email)
+    if user and user["password_hash"] == hash_password(password) and user["role"] == role:
+        return True
+    return False
+
+
+def create_helpdesk_account(full_name, email, password, role):
+    if not all([full_name, email, password, role]):
+        return False, "Please complete all account creation fields."
+
+    ensure_admin_schema()
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            f"""
+            INSERT INTO {USERS_TABLE} (email, full_name, password_hash, role, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (email, full_name, hash_password(password), role, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        )
+        conn.commit()
+        return True, "Account created successfully."
+    except sql.IntegrityError:
+        return False, "An account with that email already exists."
+    finally:
+        conn.close()
+
+
+def collect_helpdesk_context():
+    ensure_admin_schema()
+    conn = get_connection(row_factory=True)
+    users = conn.execute(
+        f"SELECT email, full_name, role, user_status, created_at FROM {USERS_TABLE} ORDER BY created_at DESC"
+    ).fetchall()
+    categories = conn.execute(
+        f"SELECT id, name, description, created_by, created_at FROM {CATEGORIES_TABLE} ORDER BY name"
+    ).fetchall()
+    tickets = conn.execute(
+        f"""
+        SELECT id, sender_email, assigned_email, category_name, subject, description, status, priority,
+               created_at, updated_at
+        FROM {TICKETS_TABLE}
+        ORDER BY created_at DESC
+        """
+    ).fetchall()
+    conn.close()
+
+    metrics = {
+        "total_users": len(users),
+        "open_tickets": sum(1 for ticket in tickets if ticket["status"] != "Closed"),
+        "categories": len(categories),
+        "staff_members": sum(1 for user in users if user["role"] == "helpdesk"),
+    }
+    return {"users": users, "categories": categories, "tickets": tickets, "metrics": metrics}
+
+
+def build_export_rows():
+    ensure_admin_schema()
+    conn = get_connection(row_factory=True)
+    rows = conn.execute(
+        f"""
+        SELECT
+            t.id AS ticket_id,
+            t.subject,
+            t.category_name,
+            t.status,
+            t.priority,
+            t.created_at,
+            t.updated_at,
+            sender.full_name AS sender_name,
+            sender.email AS sender_email,
+            sender.role AS sender_role,
+            sender.user_status AS sender_status,
+            t.assigned_email,
+            c.description AS category_description
+        FROM {TICKETS_TABLE} t
+        LEFT JOIN {USERS_TABLE} sender ON sender.email = t.sender_email
+        LEFT JOIN {CATEGORIES_TABLE} c ON c.name = t.category_name
+        ORDER BY t.created_at DESC
+        """
+    ).fetchall()
+    conn.close()
+
+    export_rows = []
+    for row in rows:
+        export_rows.append(
+            {
+                "Ticket ID": row["ticket_id"],
+                "Subject": row["subject"],
+                "Ticket Category": row["category_name"],
+                "Ticket Status": row["status"],
+                "Priority": row["priority"],
+                "Created At": row["created_at"],
+                "Updated At": row["updated_at"],
+                "Sender Name": row["sender_name"] or "Unknown",
+                "Sender Email": row["sender_email"] or "Unknown",
+                "Sender Role": row["sender_role"] or "Unknown",
+                "Sender Status": row["sender_status"] or "Unknown",
+                "Assigned Staff": row["assigned_email"],
+                "Category Description": row["category_description"] or "",
+            }
+        )
+    return export_rows
+
+
+def build_csv_bytes(rows):
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=list(rows[0].keys()) if rows else ["Message"])
+    writer.writeheader()
+    if rows:
+        writer.writerows(rows)
+    else:
+        writer.writerow({"Message": "No records available"})
+    return io.BytesIO(buffer.getvalue().encode("utf-8"))
+
+
+def build_xlsx_bytes(rows):
+    headers = list(rows[0].keys()) if rows else ["Message"]
+    data_rows = rows if rows else [{"Message": "No records available"}]
+
+    def col_name(index):
+        result = ""
+        while index:
+            index, remainder = divmod(index - 1, 26)
+            result = chr(65 + remainder) + result
+        return result
+
+    shared_strings = []
+    shared_index = {}
+
+    def string_id(value):
+        if value not in shared_index:
+            shared_index[value] = len(shared_strings)
+            shared_strings.append(value)
+        return shared_index[value]
+
+    sheet_rows = []
+    all_rows = [headers] + [[str(row.get(header, "")) for header in headers] for row in data_rows]
+    for row_number, values in enumerate(all_rows, start=1):
+        cells = []
+        for column_number, value in enumerate(values, start=1):
+            cells.append(f'<c r="{col_name(column_number)}{row_number}" t="s"><v>{string_id(value)}</v></c>')
+        sheet_rows.append(f'<row r="{row_number}">{"".join(cells)}</row>')
+
+    worksheet_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        f'<sheetData>{"".join(sheet_rows)}</sheetData></worksheet>'
+    )
+    shared_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        f'count="{len(shared_strings)}" uniqueCount="{len(shared_strings)}">'
+        + "".join(f"<si><t>{escape(value)}</t></si>" for value in shared_strings)
+        + "</sst>"
+    )
+    workbook_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<sheets><sheet name="Helpdesk Export" sheetId="1" r:id="rId1"/></sheets></workbook>'
+    )
+    workbook_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+        'Target="worksheets/sheet1.xml"/>'
+        '<Relationship Id="rId2" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" '
+        'Target="sharedStrings.xml"/></Relationships>'
+    )
+    root_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+        'Target="xl/workbook.xml"/></Relationships>'
+    )
+    content_types = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/xl/workbook.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        '<Override PartName="/xl/worksheets/sheet1.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        '<Override PartName="/xl/sharedStrings.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/></Types>'
+    )
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as workbook:
+        workbook.writestr("[Content_Types].xml", content_types)
+        workbook.writestr("_rels/.rels", root_rels)
+        workbook.writestr("xl/workbook.xml", workbook_xml)
+        workbook.writestr("xl/_rels/workbook.xml.rels", workbook_rels)
+        workbook.writestr("xl/worksheets/sheet1.xml", worksheet_xml)
+        workbook.writestr("xl/sharedStrings.xml", shared_xml)
+    output.seek(0)
+    return output
+
 @app.route('/')
 def index():
-    #Checks for session first
+    ensure_admin_schema()
     if 'user_email' in session and 'account_type' in session:
-        # if session exists, instantly redirect to specific dashboard
         return redirect(session['account_type'])
-    #Otherwise, render the login page
     return render_template('login.html')
 
 @app.route('/logout')
 def logout():
-    """
-    With session, the browser will now remember login even after we terminate the server
-    Session will remain until you close the browser window
-    In case of errors or to kill the session without logout fully implemented:
-    Type the following into your browser's URL bar: http://127.0.0.1:5000/logout
-    """
     session.clear()
-    return render_template('login.html')
+    return redirect('/')
 
 @app.route('/login_bidder', methods=['POST'])
 def login_user():
+    ensure_admin_schema()
     username = request.form.get('bidder_email')
     password = request.form.get('bidder_password')
 
@@ -51,6 +397,10 @@ def login_user():
     user = cursor.fetchone()
     # check if credentials match, if not return an error like  "Invalid username or password."
     if user is None:
+        if authenticate_app_user(username, password, 'bidder'):
+            session['user_email'] = username
+            session['account_type'] = '/bidder'
+            return redirect('/bidder')
         conn.close()
         return render_template('login.html', error="Invalid username or password")
 
@@ -67,8 +417,7 @@ def login_user():
                    """, (username,))
     if cursor.fetchone():
         conn.close()
-
-        # Needed for session: store the user's email
+        ensure_app_user(username, 'bidder')
         session['user_email'] = username
         session['account_type'] = '/bidder'
         return redirect('/bidder')
@@ -79,6 +428,7 @@ def login_user():
 
 @app.route('/login_seller', methods=['POST'])
 def login_seller():
+    ensure_admin_schema()
     seller_username = request.form.get('seller_email')
     seller_password = request.form.get('seller_password')
 
@@ -94,6 +444,10 @@ def login_seller():
     user = cursor.fetchone()
 
     if user is None:
+        if authenticate_app_user(seller_username, seller_password, 'seller'):
+            session['user_email'] = seller_username
+            session['account_type'] = '/seller'
+            return redirect('/seller')
         conn.close()
         return render_template('login.html', error="Invalid login")
 
@@ -112,8 +466,7 @@ def login_seller():
                    """, (seller_username,))
     if cursor.fetchone():
         conn.close()
-
-        #Needed for session
+        ensure_app_user(seller_username, 'seller')
         session['user_email'] = seller_username
         session['account_type'] = '/seller'
         return redirect('/seller')
@@ -124,6 +477,7 @@ def login_seller():
 
 @app.route('/login_helpdesk', methods=['POST'])
 def login_helpdesk():
+    ensure_admin_schema()
     helpdesk_username = request.form.get('helpdesk_email')
     helpdesk_password = request.form.get('helpdesk_password')
 
@@ -139,6 +493,10 @@ def login_helpdesk():
     user = cursor.fetchone()
 
     if user is None:
+        if authenticate_app_user(helpdesk_username, helpdesk_password, 'helpdesk'):
+            session['user_email'] = helpdesk_username
+            session['account_type'] = '/helpdesk'
+            return redirect('/helpdesk')
         conn.close()
         return render_template('login.html', error="Invalid login")
 
@@ -157,7 +515,7 @@ def login_helpdesk():
                    """, (helpdesk_username,))
     if cursor.fetchone():
         conn.close()
-        # Needed for session
+        ensure_app_user(helpdesk_username, 'helpdesk')
         session['user_email'] = helpdesk_username
         session['account_type'] = '/helpdesk'
         return redirect('/helpdesk')
@@ -213,11 +571,14 @@ def change_password():
 
 @app.route('/submit_ticket', methods=['POST'])
 def submit_ticket():
+    ensure_admin_schema()
 
     sender_email = session['user_email']
 
     req_type = request.form.get('request_type')
     req_desc = request.form.get('request_desc')
+    req_subject = request.form.get('request_subject', '').strip() or f"{req_type} request"
+    priority = request.form.get('priority', 'Medium').strip() or 'Medium'
 
     initial_status = 0
     default_staff_email = 'unassigned@helpdesk.com'
@@ -240,6 +601,26 @@ def submit_ticket():
                                              request_status)
                        VALUES (?, ?, ?, ?, ?)
                        ''', (sender_email, default_staff_email, req_type, req_desc, initial_status))
+        cursor.execute(
+            f'''
+            INSERT INTO {TICKETS_TABLE} (
+                sender_email, assigned_email, category_name, subject, description,
+                status, priority, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                sender_email,
+                default_staff_email,
+                req_type,
+                req_subject,
+                req_desc,
+                'Open',
+                priority,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            ),
+        )
         conn.commit()
         return render_template(template_name, helpdesk_req_success="Your request has been submitted successfully!")
     except sql.Error as e:
@@ -368,9 +749,153 @@ def list_product():
     finally:
         conn.close()
 
+@app.route('/helpdesk/create_account', methods=['POST'])
+def create_helpdesk_account_route():
+    if 'user_email' not in session or session.get('account_type') != '/helpdesk':
+        flash("You must be logged in as helpdesk to manage admin tools.", "auth_error")
+        return redirect(url_for('index'))
+
+    full_name = request.form.get('full_name', '').strip()
+    email = request.form.get('email', '').strip().lower()
+    password = request.form.get('password', '')
+    role = request.form.get('role', 'bidder').strip()
+    created, message = create_helpdesk_account(full_name, email, password, role)
+    flash(message, 'success' if created else 'danger')
+    return redirect('/helpdesk')
+
+
+@app.route('/helpdesk/create_category', methods=['POST'])
+def create_category():
+    if 'user_email' not in session or session.get('account_type') != '/helpdesk':
+        flash("You must be logged in as helpdesk to manage categories.", "auth_error")
+        return redirect(url_for('index'))
+
+    name = request.form.get('category_name', '').strip()
+    description = request.form.get('category_description', '').strip()
+    if not name or not description:
+        flash("Please provide both a category name and description.", "danger")
+        return redirect('/helpdesk')
+
+    ensure_admin_schema()
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            f"""
+            INSERT INTO {CATEGORIES_TABLE} (name, description, created_by, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (name, description, session['user_email'], datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        )
+        conn.commit()
+        flash("Category created successfully.", "success")
+    except sql.IntegrityError:
+        flash("That category already exists.", "danger")
+    finally:
+        conn.close()
+    return redirect('/helpdesk')
+
+
+@app.route('/helpdesk/update_user', methods=['POST'])
+def update_user():
+    if 'user_email' not in session or session.get('account_type') != '/helpdesk':
+        flash("You must be logged in as helpdesk to update users.", "auth_error")
+        return redirect(url_for('index'))
+
+    email = request.form.get('user_email', '').strip().lower()
+    full_name = request.form.get('full_name', '').strip()
+    role = request.form.get('role', '').strip()
+    user_status = request.form.get('user_status', '').strip()
+    if not email:
+        flash("Please select a user email to update.", "danger")
+        return redirect('/helpdesk')
+
+    ensure_admin_schema()
+    conn = get_connection()
+    result = conn.execute(
+        f"""
+        UPDATE {USERS_TABLE}
+        SET full_name = COALESCE(NULLIF(?, ''), full_name),
+            role = COALESCE(NULLIF(?, ''), role),
+            user_status = COALESCE(NULLIF(?, ''), user_status)
+        WHERE email = ?
+        """,
+        (full_name, role, user_status, email),
+    )
+    conn.commit()
+    conn.close()
+    flash("User account updated." if result.rowcount else "No matching user account was found.",
+          "success" if result.rowcount else "danger")
+    return redirect('/helpdesk')
+
+
+@app.route('/helpdesk/update_ticket/<int:ticket_id>', methods=['POST'])
+def update_ticket(ticket_id):
+    if 'user_email' not in session or session.get('account_type') != '/helpdesk':
+        flash("You must be logged in as helpdesk to update tickets.", "auth_error")
+        return redirect(url_for('index'))
+
+    status = request.form.get('status', '').strip()
+    assigned_email = request.form.get('assigned_email', '').strip() or session['user_email']
+    priority = request.form.get('priority', '').strip()
+
+    ensure_admin_schema()
+    conn = get_connection()
+    result = conn.execute(
+        f"""
+        UPDATE {TICKETS_TABLE}
+        SET status = COALESCE(NULLIF(?, ''), status),
+            assigned_email = COALESCE(NULLIF(?, ''), assigned_email),
+            priority = COALESCE(NULLIF(?, ''), priority),
+            updated_at = ?
+        WHERE id = ?
+        """,
+        (status, assigned_email, priority, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ticket_id),
+    )
+    conn.commit()
+    conn.close()
+    flash(f"Ticket #{ticket_id} updated." if result.rowcount else "Ticket not found.",
+          "success" if result.rowcount else "danger")
+    return redirect('/helpdesk')
+
+
+@app.route('/helpdesk/export/<fmt>')
+def export_helpdesk(fmt):
+    if 'user_email' not in session or session.get('account_type') != '/helpdesk':
+        flash("You must be logged in as helpdesk to export data.", "auth_error")
+        return redirect(url_for('index'))
+
+    rows = build_export_rows()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if fmt == 'csv':
+        return send_file(
+            build_csv_bytes(rows),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'helpdesk_export_{timestamp}.csv',
+        )
+    if fmt == 'xlsx':
+        return send_file(
+            build_xlsx_bytes(rows),
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'helpdesk_export_{timestamp}.xlsx',
+        )
+
+    flash("Unsupported export format.", "danger")
+    return redirect('/helpdesk')
+
+
 @app.route('/helpdesk')
 def helpdesk():
-    return render_template('helpdesk_home.html')
+    if 'user_email' not in session or session.get('account_type') != '/helpdesk':
+        flash("Please log in to continue.", "auth_error")
+        return redirect(url_for('index'))
+
+    ensure_app_user(session['user_email'], 'helpdesk')
+    context = collect_helpdesk_context()
+    context["current_user"] = get_app_user(session['user_email'])
+    return render_template('helpdesk_home.html', **context)
 
 #TODO: reconsolidate this with actual listing logic
 @app.route('/listing/<int:listing_id>')
@@ -455,6 +980,7 @@ def toggle_watchlist():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    ensure_admin_schema()
     #show the registration page
     if request.method == 'GET':
         return render_template('register.html')
@@ -544,6 +1070,7 @@ def register():
             ''', (email, bank_routing, bank_account))
 
         conn.commit()
+        ensure_app_user(email, role)
 
         return render_template('register.html',
                                success=f"Account created successfully as a {role}!")
@@ -692,5 +1219,5 @@ def update_bank():
     return redirect('/settings')
 
 if __name__ == '__main__':
-    #app.run()
+    ensure_admin_schema()
     app.run(debug=True)  #enabled to run with TEMPLATES_AUTO_RELOAD
