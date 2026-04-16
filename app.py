@@ -19,9 +19,9 @@ def hash_password(password):
 def index():
     #Checks for session first
     if 'user_email' in session and 'account_type' in session:
-        # 2. If they do, instantly redirect them to their specific dashboard
+        # if session exists, instantly redirect to specific dashboard
         return redirect(session['account_type'])
-    # Renders the login page
+    #Otherwise, render the login page
     return render_template('login.html')
 
 @app.route('/logout')
