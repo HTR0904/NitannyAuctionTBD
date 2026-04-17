@@ -259,6 +259,38 @@ def seller():
 def helpdesk():
     return render_template('helpdesk_home.html')
 
+#TODO: reconsolidate this with actual listing logic
+@app.route('/listing/<int:listing_id>')
+def view_listing(listing_id):
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+    # Grab the actual listing using the listing_id
+    cursor.execute('''SELECT * 
+                      FROM Auction_Listings 
+                      WHERE Listing_ID = ?
+                   ''', (listing_id,))
+    listing = cursor.fetchone()
+
+    if not listing:
+        conn.close()
+        return "Listing not found", 404 # 404 will trigger acutal browser behaviour
+
+    # Check watchlist status:
+    is_watching = False
+    if 'user_email' in session and session.get('account_type') == '/bidder':
+        cursor.execute('''
+                       SELECT 1
+                       FROM Watchlist
+                       WHERE Bidder_Email = ?
+                         AND Listing_ID = ?
+                       ''', (session['user_email'], listing_id))
+        is_watching = bool(cursor.fetchone())
+
+    conn.close()
+
+    # TODO: update html to be an actual one and not dev_test
+    return render_template('dev_test.html', listing=listing, is_watching=is_watching)
+
 @app.route('/toggle_watchlist', methods=['POST'])
 def toggle_watchlist():
     # Security: Ensure only bidders can watch
