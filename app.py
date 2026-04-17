@@ -2,7 +2,7 @@ from urllib.parse import urlparse
 from flask import Flask, flash, render_template, request, redirect, session, url_for
 import sqlite3 as sql
 import hashlib
-
+import uuid
 app = Flask(__name__)
 
 # Allows HTML pages to be updated by refreshing without having to rerun the code
@@ -252,8 +252,121 @@ def bidder():
     return render_template('bidders_home.html')
 
 @app.route('/seller')
+@app.route('/seller')
 def seller():
-    return render_template('seller_home.html')
+    if 'user_email' not in session or session.get('account_type') != '/seller':
+        return redirect('/')
+
+    seller_email = session['user_email']
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    #search categories
+    cursor.execute("SELECT category_name FROM Categories ORDER BY category_name")
+    categories = [r[0] for r in cursor.fetchall()]
+
+    #search goods, price
+    cursor.execute('''
+        SELECT 
+            al.Listing_ID,
+            al.Auction_Title,
+            al.Product_Name,
+            al.Category,
+            al.Reserve_Price,
+            al.Max_bids,
+            al.Status,
+            COUNT(b.Bid_ID) AS bid_count,
+            MAX(b.Bid_Price) AS current_bid
+        FROM Auction_Listings al
+        LEFT JOIN Bids b 
+            ON al.Listing_ID = b.Listing_ID 
+            AND al.Seller_Email = b.Seller_Email
+        WHERE al.Seller_Email = ?
+        GROUP BY al.Listing_ID
+        ORDER BY al.Status DESC, al.Listing_ID DESC
+    ''', (seller_email,))
+
+    my_listings = []
+    for row in cursor.fetchall():
+        my_listings.append({
+            'listing_id': row[0],
+            'auction_title': row[1],
+            'product_name': row[2],
+            'category': row[3],
+            'reserve_price': row[4],
+            'max_bids': row[5],
+            'status': row[6],
+            'bid_count': row[7],
+            'current_bid': row[8]
+        })
+
+    conn.close()
+    return render_template('seller_home.html',
+                           categories=categories,
+                           my_listings=my_listings)
+@app.route('/list_product', methods=['POST'])
+def list_product():
+    #only seller upload
+    if 'user_email' not in session or session.get('account_type') != '/seller':
+        return redirect('/')
+
+    seller_email = session['user_email']
+    auction_title = request.form.get('auction_title', '').strip()
+    product_name = request.form.get('product_name', '').strip()
+    product_description = request.form.get('product_description', '').strip()
+    category = request.form.get('category')
+    reserve_price = request.form.get('reserve_price')
+    quantity = request.form.get('quantity')
+    max_bids = request.form.get('max_bids')
+
+    def render_seller(**kwargs):
+        conn = sql.connect("dataset_tables.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT category_name FROM Categories ORDER BY category_name")
+        cats = [r[0] for r in cursor.fetchall()]
+        conn.close()
+        return render_template('seller_home.html', categories=cats, **kwargs)
+
+    #verify required
+    if not all([auction_title, product_name, product_description, category, reserve_price, quantity, max_bids]):
+        return render_seller(listing_error="Please fill out all required fields.")
+
+    #verify num
+    try:
+        reserve_price_num = float(reserve_price)
+        quantity_int = int(quantity)
+        max_bids_int = int(max_bids)
+        if reserve_price_num < 0 or quantity_int < 1 or max_bids_int < 1:
+            return render_seller(listing_error="Numeric fields must be positive.")
+    except ValueError:
+        return render_seller(listing_error="Please enter valid numbers.")
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    try:
+        formatted_price = f"${reserve_price_num:,.2f}"
+
+        cursor.execute('''
+            INSERT INTO Auction_Listings 
+            (Seller_Email, Category, Auction_Title, Product_Name, Product_Description, 
+             Quantity, Reserve_Price, Max_bids, Status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+        ''', (seller_email, category, auction_title, product_name, product_description,
+              quantity_int, formatted_price, max_bids_int))
+
+        new_listing_id = cursor.lastrowid
+        conn.commit()
+
+        return render_seller(listing_success=f"Listing created successfully! Listing ID: {new_listing_id}")
+
+    except sql.Error as e:
+        conn.rollback()
+        print(f"List product DB error: {e}")
+        return render_seller(listing_error="A database error occurred.")
+    finally:
+        conn.close()
 
 @app.route('/helpdesk')
 def helpdesk():
@@ -340,6 +453,243 @@ def toggle_watchlist():
 
     return redirect(request.referrer)
 
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    #show the registration page
+    if request.method == 'GET':
+        return render_template('register.html')
+
+    #process the registration form
+    role = request.form.get('role')
+    email = request.form.get('email', '').strip().lower()
+    password = request.form.get('password')
+    confirm_password = request.form.get('confirm_password')
+    first_name = request.form.get('first_name', '').strip()
+    last_name = request.form.get('last_name', '').strip()
+    age = request.form.get('age')
+    major = request.form.get('major', '').strip() or None
+
+    #optional address
+    street_num = request.form.get('street_num')
+    street_name = request.form.get('street_name', '').strip()
+    zipcode = request.form.get('zipcode')
+
+    #seller fields
+    bank_routing = request.form.get('bank_routing_number', '').strip()
+    bank_account = request.form.get('bank_account_number')
+
+    #validation
+    if not email or not password or not first_name or not last_name:
+        return render_template('register.html',
+                               error="Please fill out all required fields.")
+
+    if password != confirm_password:
+        return render_template('register.html',
+                               error="Passwords do not match.")
+
+    if len(password) < 6:
+        return render_template('register.html',
+                               error="Password must be at least 6 characters.")
+
+    if role not in ('bidder', 'seller'):
+        return render_template('register.html',
+                               error="Invalid account type selected.")
+
+    if role == 'seller' and (not bank_routing or not bank_account):
+        return render_template('register.html',
+                               error="Sellers must provide banking information.")
+
+    #database
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    try:
+        #email is registered？
+        cursor.execute("SELECT email FROM User_Login WHERE email = ?", (email,))
+        if cursor.fetchone():
+            return render_template('register.html',
+                                   error="This email is already registered. Please log in instead.")
+
+        #handle optional address
+        home_address_id = None
+        if street_num and street_name and zipcode:
+            cursor.execute("SELECT zipcode FROM Zipcode_Info WHERE zipcode = ?", (zipcode,))
+            if not cursor.fetchone():
+                return render_template('register.html',
+                                       error=f"Zipcode {zipcode} is not recognized in our system.")
+
+            home_address_id = uuid.uuid4().hex
+            cursor.execute('''
+                INSERT INTO Address (address_id, zipcode, street_num, street_name)
+                VALUES (?, ?, ?, ?)
+            ''', (home_address_id, zipcode, street_num, street_name))
+
+        #insert into User_Login
+        cursor.execute('''
+            INSERT INTO User_Login (email, password_hash)
+            VALUES (?, ?)
+        ''', (email, hash_password(password)))
+
+        #insert into role-specific tables
+        cursor.execute('''
+            INSERT INTO Bidders (email, first_name, last_name, age, home_address_id, major)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (email, first_name, last_name, age or None, home_address_id, major))
+
+        #if seller, insert into Sellers
+        if role == 'seller':
+            cursor.execute('''
+                INSERT INTO Sellers (email, bank_routing_number, bank_account_number, balance)
+                VALUES (?, ?, ?, 0)
+            ''', (email, bank_routing, bank_account))
+
+        conn.commit()
+
+        return render_template('register.html',
+                               success=f"Account created successfully as a {role}!")
+
+    except sql.Error as e:
+        conn.rollback()
+        print(f"Registration database error: {e}")
+        return render_template('register.html',
+                               error="A database error occurred. Please try again.")
+    finally:
+        conn.close()
+
+@app.route('/settings')
+def settings():
+    if 'user_email' not in session:
+        return redirect('/')
+
+    user_email = session['user_email']
+    account_type_raw = session.get('account_type', '').strip('/')
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    #search card
+    cursor.execute('''
+        SELECT credit_card_num, card_type, expire_month, expire_year
+        FROM Credit_Cards WHERE Owner_email = ?
+    ''', (user_email,))
+    cards = []
+    for row in cursor.fetchall():
+        cards.append({
+            'credit_card_num': row[0],
+            'card_type': row[1].strip(),
+            'expire_month': row[2],
+            'expire_year': row[3],
+            'last_four': row[0].split('-')[-1]  # 只显示后 4 位
+        })
+
+    #seller? bank info
+    cursor.execute("SELECT bank_routing_number, bank_account_number, balance FROM Sellers WHERE email = ?",
+                   (user_email,))
+    bank_row = cursor.fetchone()
+    is_seller = bank_row is not None
+
+    conn.close()
+
+    return render_template('settings.html',
+                           user_email=user_email,
+                           account_type=account_type_raw,
+                           cards=cards,
+                           is_seller=is_seller,
+                           bank_routing=bank_row[0] if bank_row else None,
+                           bank_account=bank_row[1] if bank_row else None,
+                           balance=bank_row[2] if bank_row else None)
+
+
+@app.route('/settings/add_card', methods=['POST'])
+def add_card():
+    if 'user_email' not in session:
+        return redirect('/')
+
+    email = session['user_email']
+    card_num = request.form.get('credit_card_num', '').strip()
+    card_type = request.form.get('card_type')
+    expire_month = request.form.get('expire_month')
+    expire_year = request.form.get('expire_year')
+    cvv = request.form.get('security_code')
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("SELECT 1 FROM Credit_Cards WHERE credit_card_num = ?", (card_num,))
+        if cursor.fetchone():
+            flash("This card number is already registered.", "card_error")
+            conn.close()
+            return redirect('/settings')
+
+        cursor.execute('''
+            INSERT INTO Credit_Cards 
+            (credit_card_num, card_type, expire_month, expire_year, security_code, Owner_email)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (card_num, card_type, int(expire_month), int(expire_year), int(cvv), email))
+        conn.commit()
+        flash("Card added successfully!", "card_success")
+    except sql.Error as e:
+        print(f"Add card error: {e}")
+        flash("An error occurred while adding the card.", "card_error")
+    finally:
+        conn.close()
+
+    return redirect('/settings')
+
+
+@app.route('/settings/delete_card', methods=['POST'])
+def delete_card():
+    if 'user_email' not in session:
+        return redirect('/')
+
+    email = session['user_email']
+    card_num = request.form.get('credit_card_num')
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+    try:
+        #can only delete self card
+        cursor.execute("DELETE FROM Credit_Cards WHERE credit_card_num=? AND Owner_email=?",
+                       (card_num, email))
+        conn.commit()
+        flash("Card removed.", "card_success")
+    except sql.Error:
+        flash("An error occurred.", "card_error")
+    finally:
+        conn.close()
+
+    return redirect('/settings')
+
+
+@app.route('/settings/update_bank', methods=['POST'])
+def update_bank():
+    if 'user_email' not in session:
+        return redirect('/')
+
+    email = session['user_email']
+    routing = request.form.get('bank_routing_number', '').strip()
+    account = request.form.get('bank_account_number')
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT 1 FROM Sellers WHERE email = ?", (email,))
+        if not cursor.fetchone():
+            flash("Only sellers can update bank info.", "bank_error")
+            return redirect('/settings')
+
+        cursor.execute("UPDATE Sellers SET bank_routing_number=?, bank_account_number=? WHERE email=?",
+                       (routing, int(account), email))
+        conn.commit()
+        flash("Bank info updated successfully!", "bank_success")
+    except (sql.Error, ValueError) as e:
+        print(f"Bank update error: {e}")
+        flash("An error occurred.", "bank_error")
+    finally:
+        conn.close()
+
+    return redirect('/settings')
 
 if __name__ == '__main__':
     #app.run()

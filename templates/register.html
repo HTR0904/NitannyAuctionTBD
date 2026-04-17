@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
+          integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh"
+          crossorigin="anonymous">
+
+    <style>
+        body { background-color: #ffffff; }
+        .page-title {
+            font-weight: 600;
+            color: #212529;
+            letter-spacing: -0.5px;
+        }
+        .page-subtitle {
+            color: #6c757d;
+            font-size: 1rem;
+        }
+        .section-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .role-card {
+            cursor: pointer;
+            border: 1.5px solid #dee2e6;
+            border-radius: 6px;
+            transition: all 0.15s ease;
+            background-color: #fff;
+        }
+        .role-card:hover { border-color: #495057; }
+        .role-card.active {
+            border-color: #212529;
+            background-color: #f8f9fa;
+        }
+        .seller-only { display: none; }
+        .form-control { border-radius: 4px; }
+        .btn-dark {
+            border-radius: 4px;
+            font-weight: 500;
+            padding: 0.6rem;
+        }
+        hr {
+            border-top: 1px solid #e9ecef;
+            margin: 1.75rem 0;
+        }
+        a { color: #495057; text-decoration: underline; }
+        a:hover { color: #212529; }
+    </style>
+
+    <title>Register - Nittany Auction</title>
+</head>
+<body>
+
+<div class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-md-7">
+
+            <div class="mb-4">
+                <h2 class="page-title mb-1">Create your account</h2>
+                <p class="page-subtitle mb-0">Join Nittany Auction to start bidding or selling.</p>
+            </div>
+
+            {% if error %}
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                {{ error }}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            {% endif %}
+
+            {% if success %}
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                {{ success }} <a href="/">Click here to login.</a>
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            {% endif %}
+
+            <form action="/register" method="POST" id="registerForm">
+
+                <div class="section-title">Account Type</div>
+                <div class="row mb-4">
+                    <div class="col-6">
+                        <div class="role-card text-center p-3 active" id="bidderCard"
+                             onclick="selectRole('bidder')">
+                            <div style="font-size: 1.5rem;">🛒</div>
+                            <div class="font-weight-bold">Bidder</div>
+                            <small class="text-muted">Browse and bid on items</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="role-card text-center p-3" id="sellerCard"
+                             onclick="selectRole('seller')">
+                            <div style="font-size: 1.5rem;">💰</div>
+                            <div class="font-weight-bold">Seller</div>
+                            <small class="text-muted">List products for auction</small>
+                        </div>
+                    </div>
+                </div>
+                <input type="hidden" name="role" id="roleInput" value="bidder">
+
+                <hr>
+
+                <div class="section-title">Account Credentials</div>
+                <div class="form-group">
+                    <label for="email">Email Address (Your User ID)</label>
+                    <input type="email" name="email" id="email" class="form-control"
+                           placeholder="you@psu.edu" required>
+                    <small class="form-text text-muted">
+                        This will be your User ID. To change it later, you'll need to contact Helpdesk.
+                    </small>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="password">Password</label>
+                        <input type="password" name="password" id="password"
+                               class="form-control" required minlength="6">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="confirm_password">Confirm Password</label>
+                        <input type="password" name="confirm_password" id="confirm_password"
+                               class="form-control" required minlength="6">
+                    </div>
+                </div>
+
+                <hr>
+
+                <div class="section-title">Personal Information</div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        <label for="first_name">First Name</label>
+                        <input type="text" name="first_name" id="first_name"
+                               class="form-control" required>
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="last_name">Last Name</label>
+                        <input type="text" name="last_name" id="last_name"
+                               class="form-control" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group col-md-4">
+                        <label for="age">Age</label>
+                        <input type="number" name="age" id="age" class="form-control"
+                               min="13" max="120">
+                    </div>
+                    <div class="form-group col-md-8">
+                        <label for="major">Major <small class="text-muted">(optional)</small></label>
+                        <input type="text" name="major" id="major"
+                               class="form-control" placeholder="e.g. Computer Science">
+                    </div>
+                </div>
+
+                <div class="section-title mt-3">Home Address <small class="text-muted text-lowercase" style="letter-spacing:0;">(optional)</small></div>
+                <div class="form-row">
+                    <div class="form-group col-md-3">
+                        <label for="street_num">Street #</label>
+                        <input type="number" name="street_num" id="street_num" class="form-control">
+                    </div>
+                    <div class="form-group col-md-6">
+                        <label for="street_name">Street Name</label>
+                        <input type="text" name="street_name" id="street_name" class="form-control">
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label for="zipcode">Zipcode</label>
+                        <input type="number" name="zipcode" id="zipcode" class="form-control">
+                    </div>
+                </div>
+
+                <div class="seller-only">
+                    <hr>
+                    <div class="section-title">Banking Information
+                        <small class="text-muted text-lowercase" style="letter-spacing:0;">(required for sellers)</small>
+                    </div>
+                    <p class="text-muted small">
+                        This information is required to receive payouts from completed auctions.
+                    </p>
+
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="bank_routing_number">Bank Routing Number</label>
+                            <input type="text" name="bank_routing_number"
+                                   id="bank_routing_number" class="form-control"
+                                   placeholder="e.g. 0011-4959-0">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="bank_account_number">Bank Account Number</label>
+                            <input type="number" name="bank_account_number"
+                                   id="bank_account_number" class="form-control">
+                        </div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <button type="submit" class="btn btn-dark btn-block btn-lg">
+                    Create Account
+                </button>
+
+                <div class="text-center mt-3">
+                    <small class="text-muted">Already have an account? <a href="/">Log in here</a></small>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    function selectRole(role) {
+        document.getElementById('roleInput').value = role;
+        document.getElementById('bidderCard').classList.toggle('active', role === 'bidder');
+        document.getElementById('sellerCard').classList.toggle('active', role === 'seller');
+
+        const sellerFields = document.querySelectorAll('.seller-only');
+        sellerFields.forEach(el => {
+            el.style.display = (role === 'seller') ? 'block' : 'none';
+        });
+
+        document.getElementById('bank_routing_number').required = (role === 'seller');
+        document.getElementById('bank_account_number').required = (role === 'seller');
+    }
+
+    document.getElementById('registerForm').addEventListener('submit', function(e) {
+        const pw = document.getElementById('password').value;
+        const cpw = document.getElementById('confirm_password').value;
+        if (pw !== cpw) {
+            e.preventDefault();
+            alert('Passwords do not match.');
+        }
+    });
+</script>
+
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+</body>
+</html>

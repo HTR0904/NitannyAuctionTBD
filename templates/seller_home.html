@@ -87,80 +87,114 @@
 
     <div class="seller-block p-4 mb-5">
         <h3 class="text-navy font-weight-bold mb-3">List a Product</h3>
-        <p class="text-muted">Enter the item details, choose a category, set a hidden reserve price, and choose when the auction should stop.</p>
+        <p class="text-muted">Enter the item details, choose a category, set a hidden reserve price, and specify max bids.</p>
 
-        <form>
+        {% if listing_error %}
+        <div class="alert alert-danger">{{ listing_error }}</div>
+        {% endif %}
+        {% if listing_success %}
+        <div class="alert alert-success">{{ listing_success }}</div>
+        {% endif %}
+
+        <form action="/list_product" method="POST">
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label>Auction Title</label>
+                    <input type="text" name="auction_title" class="form-control" placeholder="e.g. Samsung Galaxy" required>
+                </div>
+                <div class="form-group col-md-6">
+                    <label>Product Name</label>
+                    <input type="text" name="product_name" class="form-control" placeholder="e.g. S22" required>
+                </div>
+            </div>
+
             <div class="form-group">
-                <label>Product Details</label>
-                <textarea class="form-control" rows="3" placeholder="Example: Used TI-84 calculator in good condition"></textarea>
+                <label>Product Description</label>
+                <textarea name="product_description" class="form-control" rows="3" placeholder="Example: Used TI-84 calculator in good condition" required></textarea>
             </div>
 
             <div class="form-row">
-                <div class="form-group col-md-4">
+                <div class="form-group col-md-3">
                     <label>Category</label>
-                    <select class="form-control">
-                        <option selected>Select category</option>
-                        <option>Electronics</option>
-                        <option>Books</option>
-                        <option>Furniture</option>
+                    <select name="category" class="form-control" required>
+                        <option value="" selected disabled>Select category</option>
+                        {% for cat in categories %}
+                        <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
                     </select>
                 </div>
 
-                <div class="form-group col-md-4">
-                    <label>Hidden Reserve Price</label>
-                    <input type="text" class="form-control" placeholder="Enter reserve price">
+                <div class="form-group col-md-3">
+                    <label>Hidden Reserve Price ($)</label>
+                    <input type="number" name="reserve_price" step="0.01" min="0" class="form-control" placeholder="e.g. 50.00" required>
                 </div>
 
-                <div class="form-group col-md-4">
-                    <label>Auction Stop Time</label>
-                    <input type="text" class="form-control" placeholder="MM/DD/YYYY HH:MM">
+                <div class="form-group col-md-3">
+                    <label>Quantity</label>
+                    <input type="number" name="quantity" min="1" value="1" class="form-control" required>
+                </div>
+
+                <div class="form-group col-md-3">
+                    <label>Max Number of Bids</label>
+                    <input type="number" name="max_bids" min="1" class="form-control" placeholder="e.g. 10" required>
                 </div>
             </div>
 
-            <button type="button" class="btn btn-navy">Create Listing</button>
+            <button type="submit" class="btn btn-navy">Create Listing</button>
         </form>
     </div>
 
     <div class="seller-block p-4 mb-5">
         <h3 class="text-navy font-weight-bold mb-3">Manage My Listings</h3>
-        <p class="text-muted">Here are example listings a seller might want to review or update.</p>
+        <p class="text-muted">All listings you've posted, with current auction state.</p>
 
+        {% if my_listings %}
         <table class="table table-bordered table-hover bg-white">
             <thead class="thead-light">
                 <tr>
+                    <th>Listing ID</th>
                     <th>Product</th>
                     <th>Category</th>
+                    <th>Reserve Price</th>
                     <th>Current Highest Bid</th>
-                    <th>Auction Stop Time</th>
+                    <th>Bids Progress</th>
                     <th>Status</th>
-                    <th>Manage</th>
                 </tr>
             </thead>
             <tbody>
+                {% for item in my_listings %}
                 <tr>
-                    <td>Desk Lamp</td>
-                    <td>Furniture</td>
-                    <td>$18.00</td>
-                    <td>03/28/2026 10:00 PM</td>
-                    <td>Active</td>
+                    <td>#{{ item.listing_id }}</td>
                     <td>
-                        <button class="btn btn-outline-primary btn-sm">View</button>
-                        <button class="btn btn-outline-secondary btn-sm">Edit</button>
+                        <strong>{{ item.product_name }}</strong><br>
+                        <small class="text-muted">{{ item.auction_title }}</small>
+                    </td>
+                    <td>{{ item.category }}</td>
+                    <td>{{ item.reserve_price }}</td>
+                    <td>
+                        {% if item.current_bid %}
+                            ${{ "%.2f"|format(item.current_bid) }}
+                        {% else %}
+                            <span class="text-muted">No bids yet</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.bid_count }} / {{ item.max_bids }}</td>
+                    <td>
+                        {% if item.status == 1 %}
+                            <span class="badge badge-success">Active</span>
+                        {% elif item.status == 2 %}
+                            <span class="badge badge-secondary">Sold</span>
+                        {% else %}
+                            <span class="badge badge-dark">Inactive</span>
+                        {% endif %}
                     </td>
                 </tr>
-                <tr>
-                    <td>Monitor</td>
-                    <td>Electronics</td>
-                    <td>$180.00</td>
-                    <td>03/26/2026 08:00 PM</td>
-                    <td>Closed</td>
-                    <td>
-                        <button class="btn btn-outline-primary btn-sm">View</button>
-                        <button class="btn btn-outline-secondary btn-sm">Edit</button>
-                    </td>
-                </tr>
+                {% endfor %}
             </tbody>
         </table>
+        {% else %}
+        <p class="text-muted font-italic">You haven't listed any products yet. Use the form above to create your first listing!</p>
+        {% endif %}
     </div>
 
     <div class="seller-block p-4 mb-5">

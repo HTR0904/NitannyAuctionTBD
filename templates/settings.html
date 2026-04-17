@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+    <title>Settings - Nittany Auction</title>
+    <style>
+        .bg-navy { background-color: #041E42; }
+        .text-navy { color: #041E42; }
+        .settings-block {
+            background-color: white;
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            box-shadow: 0 .125rem .25rem rgba(0,0,0,.075);
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-dark bg-navy">
+    <div class="container">
+        <a class="navbar-brand font-weight-bold"
+           href="/{{ 'seller' if is_seller else 'bidder' }}">← Back to Dashboard</a>
+        <span class="navbar-text text-light">Signed in as: {{ user_email }}</span>
+    </div>
+</nav>
+
+<div class="container mt-5">
+    <h2 class="text-navy font-weight-bold mb-4">Account Settings</h2>
+
+    <!-- === Change Password === -->
+    <div class="settings-block p-4 mb-4">
+        <h4 class="text-navy mb-3">Change Password</h4>
+
+        {% if password_error %}<div class="alert alert-danger">{{ password_error }}</div>{% endif %}
+        {% if password_success %}<div class="alert alert-success">{{ password_success }}</div>{% endif %}
+
+        <form action="/change_password" method="POST">
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label>Current Password</label>
+                    <input type="password" name="current_password" class="form-control" required>
+                </div>
+                <div class="form-group col-md-4">
+                    <label>New Password</label>
+                    <input type="password" name="new_password" class="form-control" required>
+                </div>
+                <div class="form-group col-md-4">
+                    <label>Confirm New Password</label>
+                    <input type="password" name="confirm_new_password" class="form-control" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-dark">Update Password</button>
+        </form>
+    </div>
+
+    <!-- === Credit Cards === -->
+    <div class="settings-block p-4 mb-4">
+        <h4 class="text-navy mb-3">Credit Cards</h4>
+        <p class="text-muted small">Manage your payment methods for bidding.</p>
+
+        {% with msgs = get_flashed_messages(category_filter=["card_error"]) %}
+            {% if msgs %}<div class="alert alert-danger">{{ msgs[0] }}</div>{% endif %}
+        {% endwith %}
+        {% with msgs = get_flashed_messages(category_filter=["card_success"]) %}
+            {% if msgs %}<div class="alert alert-success">{{ msgs[0] }}</div>{% endif %}
+        {% endwith %}
+
+        {% if cards %}
+        <table class="table table-sm">
+            <thead class="thead-light">
+                <tr>
+                    <th>Type</th>
+                    <th>Card Number</th>
+                    <th>Expires</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for card in cards %}
+                <tr>
+                    <td>{{ card.card_type }}</td>
+                    <td>•••• •••• •••• {{ card.last_four }}</td>
+                    <td>{{ "%02d"|format(card.expire_month) }}/{{ card.expire_year }}</td>
+                    <td>
+                        <form action="/settings/delete_card" method="POST" class="d-inline">
+                            <input type="hidden" name="credit_card_num" value="{{ card.credit_card_num }}">
+                            <button type="submit" class="btn btn-outline-danger btn-sm"
+                                    onclick="return confirm('Delete this card?');">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted font-italic">No cards on file.</p>
+        {% endif %}
+
+        <h5 class="mt-4">Add a New Card</h5>
+        <form action="/settings/add_card" method="POST">
+            <div class="form-row">
+                <div class="form-group col-md-3">
+                    <label>Card Type</label>
+                    <select name="card_type" class="form-control" required>
+                        <option value="Visa">Visa</option>
+                        <option value="Master">Mastercard</option>
+                        <option value="Amex">American Express</option>
+                        <option value="Discover">Discover</option>
+                    </select>
+                </div>
+                <div class="form-group col-md-4">
+                    <label>Card Number (XXXX-XXXX-XXXX-XXXX)</label>
+                    <input type="text" name="credit_card_num" class="form-control"
+                           pattern="\d{4}-\d{4}-\d{4}-\d{4}" placeholder="1234-5678-9012-3456" required>
+                </div>
+                <div class="form-group col-md-2">
+                    <label>Exp Month</label>
+                    <input type="number" name="expire_month" class="form-control" min="1" max="12" required>
+                </div>
+                <div class="form-group col-md-2">
+                    <label>Exp Year</label>
+                    <input type="number" name="expire_year" class="form-control" min="2025" max="2040" required>
+                </div>
+                <div class="form-group col-md-1">
+                    <label>CVV</label>
+                    <input type="number" name="security_code" class="form-control" min="100" max="9999" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-dark">Add Card</button>
+        </form>
+    </div>
+
+    <!-- === Bank Info (Seller only) === -->
+    {% if is_seller %}
+    <div class="settings-block p-4 mb-4">
+        <h4 class="text-navy mb-3">Bank Account (for Payouts)</h4>
+        <p class="text-muted small">This bank account is used to receive payments from completed auctions.</p>
+
+        {% with msgs = get_flashed_messages(category_filter=["bank_error"]) %}
+            {% if msgs %}<div class="alert alert-danger">{{ msgs[0] }}</div>{% endif %}
+        {% endwith %}
+        {% with msgs = get_flashed_messages(category_filter=["bank_success"]) %}
+            {% if msgs %}<div class="alert alert-success">{{ msgs[0] }}</div>{% endif %}
+        {% endwith %}
+
+        <form action="/settings/update_bank" method="POST">
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    <label>Bank Routing Number</label>
+                    <input type="text" name="bank_routing_number" class="form-control"
+                           value="{{ bank_routing or '' }}" required>
+                </div>
+                <div class="form-group col-md-6">
+                    <label>Bank Account Number</label>
+                    <input type="number" name="bank_account_number" class="form-control"
+                           value="{{ bank_account or '' }}" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Current Balance</label>
+                <input type="text" class="form-control" value="${{ balance or 0 }}" readonly>
+            </div>
+            <button type="submit" class="btn btn-dark">Update Bank Info</button>
+        </form>
+    </div>
+    {% endif %}
+
+    <!-- === Change User ID notice === -->
+    <div class="settings-block p-4 mb-4">
+        <h4 class="text-navy mb-3">Change User ID (Email)</h4>
+        <p class="text-muted">
+            Your User ID cannot be changed directly. Please submit a request via the
+            <a href="/contact">Contact Helpdesk</a> page.
+        </p>
+    </div>
+</div>
+
+</body>
+</html>
