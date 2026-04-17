@@ -21,6 +21,7 @@
         }
         .table-wrap { max-height: 420px; overflow: auto; }
         .pill { display: inline-block; border-radius: 999px; padding: 0.25rem 0.75rem; background: var(--cloud); color: var(--navy); font-size: 0.85rem; font-weight: 600; }
+        .subpanel { background: #f8fbff; border: 1px solid #d7e2f2; border-radius: 16px; }
     </style>
 </head>
 <body>
@@ -73,6 +74,35 @@
         <div class="col-lg-6 mb-4">
             <div class="work-card p-4 h-100">
                 <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="font-weight-bold mb-0">User Management</h3><span class="pill">Account creation enabled</span></div>
+                <div class="subpanel p-3 mb-4">
+                    <h5 class="font-weight-bold">Create Account</h5>
+                    <form action="/helpdesk/create_account" method="POST">
+                        <div class="form-row">
+                            <div class="form-group col-md-4">
+                                <label>Full name</label>
+                                <input type="text" class="form-control" name="full_name" placeholder="New user name" required>
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label>Email</label>
+                                <input type="email" class="form-control" name="email" placeholder="newuser@psu.edu" required>
+                            </div>
+                            <div class="form-group col-md-2">
+                                <label>Role</label>
+                                <select class="form-control" name="role">
+                                    <option value="bidder">Bidder</option>
+                                    <option value="seller">Seller</option>
+                                    <option value="helpdesk">Helpdesk</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-2">
+                                <label>Password</label>
+                                <input type="password" class="form-control" name="password" value="password123" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-navy">Create Account</button>
+                    </form>
+                </div>
+
                 <form action="/helpdesk/update_user" method="POST" class="mb-4">
                     <div class="form-group">
                         <label>User email</label>
