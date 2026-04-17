@@ -1,5 +1,5 @@
 from urllib.parse import urlparse
-from flask import Flask, render_template, request, redirect, session, url_for
+from flask import Flask, flash, render_template, request, redirect, session, url_for
 import sqlite3 as sql
 import hashlib
 
@@ -258,6 +258,56 @@ def seller():
 @app.route('/helpdesk')
 def helpdesk():
     return render_template('helpdesk_home.html')
+
+@app.route('/toggle_watchlist', methods=['POST'])
+def toggle_watchlist():
+    # Security: Ensure only bidders can watch
+    if 'user_email' not in session or session.get('account_type') != '/bidder':
+        flash("You must be logged in as a bidder to use the watchlist.", "auth_error")
+        return redirect(url_for('index'))
+
+    bidder_email = session['user_email']
+    listing_id = request.form.get('listing_id')
+    seller_email = request.form.get('seller_email')
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    try:
+        # Check status (watching or not)
+        cursor.execute('''
+                       SELECT 1
+                       FROM Watchlist
+                       WHERE Bidder_Email = ?
+                         AND Listing_ID = ?
+                       ''', (bidder_email, listing_id))
+
+        if cursor.fetchone():
+            # UNWATCH
+            cursor.execute('''
+                           DELETE
+                           FROM Watchlist
+                           WHERE Bidder_Email = ?
+                             AND Listing_ID = ?
+                           ''', (bidder_email, listing_id))
+            flash("Listing removed from your watchlist.", "watch_success")
+        else:
+            # WATCH
+            cursor.execute('''
+                           INSERT INTO Watchlist (Bidder_Email, Listing_ID, Seller_Email)
+                           VALUES (?, ?, ?)
+                           ''', (bidder_email, listing_id, seller_email))
+            flash("Listing added to your watchlist!", "watch_success")
+
+        conn.commit()
+    except sql.Error as e:
+        print(f"Database error: {e}")
+        flash("An error occurred while updating your watchlist.", "watch_error")
+    finally:
+        conn.close()
+
+    return redirect(request.referrer)
+
 
 if __name__ == '__main__':
     #app.run()

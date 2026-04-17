@@ -1,0 +1,41 @@
+{% set listing = {'Seller_Email': 'dev_test@email.com', 'Listing_ID': 123} %}
+{% set is_watching = False %}
+<!--TODO: comment out the above-->
+
+<form action="{{ url_for('toggle_watchlist') }}" method="POST" class="d-inline">
+    <input type="hidden" name="seller_email" value="{{ listing.Seller_Email }}">
+    <input type="hidden" name="listing_id" value="{{ listing.Listing_ID }}">
+
+    {% if is_watching %}
+        <!--TODO: realign color scheme-->
+        <button type="submit" class="btn btn-primary btn-block mt-3 font-weight-bold text-dark">
+            ★ Watching
+        </button>
+    {% else %}
+        <button type="submit" class="btn btn-outline-secondary btn-block mt-3 font-weight-bold">
+            ☆ Add to Watchlist
+        </button>
+    {% endif %}
+</form>
+
+{% with success_msgs = get_flashed_messages(category_filter=["watch_success"]) %}
+  {% if success_msgs %}
+    <div class="alert alert-success alert-dismissible fade show mt-2" role="alert">
+        {{ success_msgs[0] }}
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    </div>
+  {% endif %}
+{% endwith %}
+
+{% with error_msgs = get_flashed_messages(category_filter=["watch_error"]) %}
+  {% if error_msgs %}
+    <div class="alert alert-danger alert-dismissible fade show mt-2" role="alert">
+        {{ error_msgs[0] }}
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    </div>
+  {% endif %}
+{% endwith %}
