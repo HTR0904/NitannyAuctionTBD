@@ -201,12 +201,30 @@ def create_helpdesk_account(full_name, email, password, role):
 def collect_helpdesk_context():
     ensure_admin_schema()
     conn = get_connection(row_factory=True)
+
     users = conn.execute(
         f"SELECT email, full_name, role, user_status, created_at FROM {USERS_TABLE} ORDER BY created_at DESC"
     ).fetchall()
-    categories = conn.execute(
-        f"SELECT id, name, description, created_by, created_at FROM {CATEGORIES_TABLE} ORDER BY name"
+
+    # Grab the raw categories
+    raw_categories = conn.execute(
+        "SELECT parent_category, category_name FROM Categories ORDER BY parent_category, category_name"
     ).fetchall()
+
+    # Group them into a dictionary for the collapsible tree view
+    grouped_categories = {}
+    for row in raw_categories:
+        parent = row["parent_category"]
+        child = row["category_name"]
+        if parent not in grouped_categories:
+            grouped_categories[parent] = []
+        grouped_categories[parent].append(child)
+
+    # Grab just the unique parent categories for our dropdown form
+    distinct_parents = conn.execute(
+        "SELECT DISTINCT parent_category FROM Categories ORDER BY parent_category"
+    ).fetchall()
+
     tickets = conn.execute(
         f"""
         SELECT id, sender_email, assigned_email, category_name, subject, description, status, priority,
@@ -220,12 +238,19 @@ def collect_helpdesk_context():
     metrics = {
         "total_users": len(users),
         "open_tickets": sum(1 for ticket in tickets if ticket["status"] != "Closed"),
-        "categories": len(categories),
+        "categories": len(raw_categories),  # Keeps the metric count accurate
         "staff_members": sum(1 for user in users if user["role"] == "helpdesk"),
     }
-    return {"users": users, "categories": categories, "tickets": tickets, "metrics": metrics}
 
+    return {
+        "users": users,
+        "categories": grouped_categories,  # Passing the grouped dict now
+        "distinct_parents": distinct_parents,
+        "tickets": tickets,
+        "metrics": metrics
+    }
 
+    return redirect('/helpdesk')
 def build_export_rows():
     ensure_admin_schema()
     conn = get_connection(row_factory=True)
@@ -789,26 +814,41 @@ def create_category():
     if 'user_email' not in session or session.get('account_type') != '/helpdesk':
         flash("You must be logged in as helpdesk to manage categories.", "auth_error")
         return redirect(url_for('index'))
-    name = request.form.get('category_name', '').strip()
-    description = request.form.get('category_description', '').strip()
-    if not name or not description:
-        flash("Please provide both a category name and description.", "danger")
+
+    existing_parent = request.form.get('existing_parent')
+    new_parent = request.form.get('new_parent', '').strip()
+    child_category = request.form.get('child_category', '').strip()
+
+    # Determine what the parent name should be based on the form logic
+    if existing_parent == 'NEW_PARENT' and new_parent:
+        final_parent = new_parent
+    elif existing_parent and existing_parent != 'NEW_PARENT':
+        final_parent = existing_parent
+    else:
+        flash("Please select a parent category or provide a new one.", "danger")
         return redirect('/helpdesk')
 
-    ensure_admin_schema()
+    if not child_category:
+        flash("Please provide a subcategory name.", "danger")
+        return redirect('/helpdesk')
+
     conn = get_connection()
     cursor = conn.cursor()
     try:
+        # Insert directly into the official schema table
         cursor.execute(
-            f"INSERT INTO {CATEGORIES_TABLE} (name, description, created_by, created_at) VALUES (?, ?, ?, ?)",
-            (name, description, session['user_email'], datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+            "INSERT INTO Categories (parent_category, category_name) VALUES (?, ?)",
+            (final_parent, child_category),
         )
         conn.commit()
         flash("Category created successfully.", "success")
     except sql.IntegrityError:
-        flash("That category already exists.", "danger")
+        flash("That subcategory already exists under the selected parent.", "danger")
+    except sql.Error as e:
+        flash(f"Database error: {e}", "danger")
     finally:
         conn.close()
+
     return redirect('/helpdesk')
 
 
