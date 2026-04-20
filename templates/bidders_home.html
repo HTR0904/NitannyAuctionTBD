@@ -47,11 +47,19 @@
                         </svg>
                     </a>
                 </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle font-weight-bold text-white" href="#" id="profileDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        {{ current_user["full_name"] if current_user else "Profile" }}
 
-                <li class="nav-item">
-                    <a class="nav-link" href="/settings" id="profileDropdown">
-                        <img src="https://static.vecteezy.com/system/resources/thumbnails/009/292/244/small/default-avatar-icon-of-social-media-user-vector.jpg" class="rounded-circle mr-1 navbar-profile-pic" alt="Profile"> Profile
                     </a>
+                    <div class="dropdown-menu dropdown-menu-right shadow-sm" aria-labelledby="profileDropdown">
+                        <a class="dropdown-item" href="/settings">Account Settings</a>
+                        <a class="dropdown-item" href="/watchlist">My Watchlist</a>
+                        <a class="dropdown-item" href="/notifications">Notifications</a>
+                        <a class="dropdown-item" href="/contact">Contact Us</a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item text-danger" href="{{ url_for('logout') }}">Logout</a>
+                    </div>
                 </li>
                 <li class="nav-item">
                   <a class="nav-link" href="/logout">Logout</a>
@@ -128,5 +136,10 @@
         </div>
     </div>
 </div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+
 </body>
 </html>

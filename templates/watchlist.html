@@ -20,53 +20,59 @@
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-navy">
     <div class="container">
-        <a class="navbar-brand font-weight-bold" href="{{ url_for('bidder') }}">Nittany Auction</a>
+
+        <a class="navbar-brand font-weight-bold" href="/home">Nittany Auction</a>
 
         <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
 
         <div class="collapse navbar-collapse" id="navbarContent">
-            <form class="form-inline mx-auto my-2 my-lg-0" action="{{ url_for('bidder_search') }}" method="GET">
-                <input class="form-control mr-sm-2" type="search" name="query" placeholder="Search auctions" style="width: 350px">
+
+            <form class="form-inline mx-auto my-2 my-lg-0" action="/search" method="GET">
+                <input class="form-control mr-sm-2" type="search" name="q" placeholder="Search" aria-label="Search" style="width: 350px">
                 <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Search</button>
             </form>
 
             <ul class="navbar-nav align-items-center">
                 <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('bidder') }}">Home</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('bidder') }}#my-bids">My Bids</a>
+                    <a class="nav-link" href="/view_bids">View Bids</a>
                 </li>
                 <li class="nav-item mr-3">
-                    <a class="nav-link" href="{{ url_for('bidder') }}#ratings">Ratings</a>
+                    <a class="nav-link" href="/contact">Contact Us</a>
                 </li>
 
                 <li class="nav-item mr-3">
                     <a class="nav-link" href="/notifications" title="Notifications">
+                         <!-- Notification icon from bootstrap -->
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bell" viewBox="0 0 16 16">
-                            <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6"/>
+                        <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6"/>
                         </svg>
                     </a>
                 </li>
-
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle font-weight-bold text-white" href="#" id="profileDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                       Profile
+                        {{ current_user["full_name"] if current_user else "Profile" }}
+
                     </a>
                     <div class="dropdown-menu dropdown-menu-right shadow-sm" aria-labelledby="profileDropdown">
                         <a class="dropdown-item" href="/settings">Account Settings</a>
                         <a class="dropdown-item" href="/watchlist">My Watchlist</a>
                         <a class="dropdown-item" href="/notifications">Notifications</a>
+                        <a class="dropdown-item" href="/contact">Contact Us</a>
                         <div class="dropdown-divider"></div>
                         <a class="dropdown-item text-danger" href="{{ url_for('logout') }}">Logout</a>
                     </div>
                 </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="/logout">Logout</a>
+                </li>
             </ul>
+
         </div>
     </div>
 </nav>
+
 
 <div class="container mt-4">
 
