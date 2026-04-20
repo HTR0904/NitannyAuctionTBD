@@ -68,6 +68,15 @@ def ensure_admin_schema():
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS Watchlist (
+            Bidder_Email TEXT NOT NULL,
+            Listing_ID INTEGER NOT NULL,
+            Seller_Email TEXT NOT NULL,
+            PRIMARY KEY (Bidder_Email, Listing_ID),
+            FOREIGN KEY (Bidder_Email) REFERENCES Bidders(email),
+            FOREIGN KEY (Listing_ID) REFERENCES Auction_Listings(Listing_ID)
+        );
         """
     )
 
