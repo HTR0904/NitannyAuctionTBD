@@ -59,7 +59,22 @@
         </button>
 
         <div class="collapse navbar-collapse" id="navbarContent">
-            <ul class="navbar-nav align-items-center ml-auto">
+
+
+            <form class="form-inline mx-auto my-2 my-lg-0" action="/search" method="GET">
+                <input class="form-control mr-sm-2" type="search" name="q" placeholder="Search" aria-label="Search" style="width: 350px">
+                <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Search</button>
+            </form>
+
+            <ul class="navbar-nav align-items-center">
+                <li class="nav-item">
+                    <a class="nav-link" href="#">My Listings</a>
+                </li>
+                <li class="nav-item mr-3">
+                    <a class="nav-link" href="/contact">Contact Us</a>
+                </li>
+
+
                 <li class="nav-item mr-3">
                     <a class="nav-link" href="/notifications" title="Notifications">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bell" viewBox="0 0 16 16">
@@ -70,7 +85,9 @@
 
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle font-weight-bold text-white" href="#" id="profileDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                        {{ current_user["full_name"] }}
+                        <img src="https://static.vecteezy.com/system/resources/thumbnails/009/292/244/small/default-avatar-icon-of-social-media-user-vector.jpg" class="rounded-circle mr-1 navbar-profile-pic" alt="Profile">
+                        {{ current_user["full_name"] if current_user else "Profile" }}
+
                     </a>
                     <div class="dropdown-menu dropdown-menu-right shadow-sm" aria-labelledby="profileDropdown">
                         <a class="dropdown-item" href="/settings">Account Settings</a>

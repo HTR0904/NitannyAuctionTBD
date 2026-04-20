@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+    <title>Search - Nittany Auction</title>
+    <style>
+        .bg-navy { background-color: #041E42; }
+        .text-navy { color: #041E42; }
+        .filter-panel {
+            background-color: white;
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            padding: 1.5rem;
+            position: sticky;
+            top: 20px;
+        }
+        .result-card {
+            background-color: white;
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            transition: all 0.15s;
+        }
+        .result-card:hover {
+            box-shadow: 0 .25rem .5rem rgba(0,0,0,.1);
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-dark bg-navy">
+    <div class="container">
+        <a class="navbar-brand font-weight-bold"
+           href="/{{ 'seller' if account_type == '/seller' else 'bidder' }}">← Back to Dashboard</a>
+        <span class="navbar-text text-light">Signed in as: {{ user_email }}</span>
+    </div>
+</nav>
+
+<div class="container mt-4">
+    <h2 class="text-navy font-weight-bold mb-4">Browse Listings</h2>
+
+    <form action="/search" method="GET">
+        <!--search-->
+        <div class="input-group input-group-lg mb-4">
+            <input type="text" name="q" class="form-control"
+                   placeholder="Search by title or product name..." value="{{ query or '' }}">
+            <div class="input-group-append">
+                <button type="submit" class="btn btn-dark">Search</button>
+            </div>
+        </div>
+
+        <div class="row">
+            <!--filter-->
+            <div class="col-md-3">
+                <div class="filter-panel">
+                    <h5 class="text-navy mb-3">Filters</h5>
+
+                    <div class="form-group">
+                        <label><small><strong>Category</strong></small></label>
+                        <select name="category" class="form-control form-control-sm">
+                            <option value="">All Categories</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat }}" {% if cat == selected_category %}selected{% endif %}>
+                                {{ cat }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label><small><strong>Price Range ($)</strong></small></label>
+                        <div class="form-row">
+                            <div class="col">
+                                <input type="number" name="min_price" class="form-control form-control-sm"
+                                       placeholder="Min" value="{{ min_price or '' }}" min="0">
+                            </div>
+                            <div class="col">
+                                <input type="number" name="max_price" class="form-control form-control-sm"
+                                       placeholder="Max" value="{{ max_price or '' }}" min="0">
+                            </div>
+                        </div>
+                        <small class="form-text text-muted mt-2">Filter by:</small>
+                        <select name="price_type" class="form-control form-control-sm">
+                            <option value="reserve" {% if price_type == 'reserve' %}selected{% endif %}>Starting Price</option>
+                            <option value="current_bid" {% if price_type == 'current_bid' %}selected{% endif %}>Current Highest Bid</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-dark btn-sm btn-block">Apply Filters</button>
+                    <a href="/search" class="btn btn-outline-secondary btn-sm btn-block">Clear All</a>
+                </div>
+            </div>
+
+            <!--results-->
+            <div class="col-md-9">
+                <p class="text-muted">
+                    {% if results %}
+                        Showing <strong>{{ results|length }}</strong> result{{ 's' if results|length != 1 }}
+                        {% if query %} for "<strong>{{ query }}</strong>"{% endif %}
+                    {% else %}
+                        No results {% if query %}for "<strong>{{ query }}</strong>"{% endif %}
+                    {% endif %}
+                </p>
+
+                {% for item in results %}
+                <div class="result-card">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h5 class="mb-1">
+                                <a href="/listing/{{ item.listing_id }}" class="text-navy text-decoration-none">
+                                    {{ item.product_name }}
+                                </a>
+                            </h5>
+                            <p class="text-muted mb-1">{{ item.auction_title }}</p>
+                            <small class="text-muted">
+                                <span class="badge badge-light">{{ item.category }}</span>
+                                &nbsp; Listing #{{ item.listing_id }}
+                            </small>
+                        </div>
+                        <div class="col-md-4 text-right">
+                            {% if item.current_bid %}
+                                <div class="text-navy font-weight-bold h5">
+                                    ${{ "%.2f"|format(item.current_bid) }}
+                                </div>
+                                <small class="text-muted">{{ item.bid_count }} bid{{ 's' if item.bid_count != 1 }}</small>
+                            {% else %}
+                                <div class="text-muted">No bids yet</div>
+                                <small class="text-muted">Starting from {{ item.reserve_price }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+
+                {% if not results and (query or selected_category or min_price or max_price) %}
+                <div class="text-center text-muted mt-5">
+                    <p>No listings match your criteria.</p>
+                    <a href="/search" class="btn btn-outline-dark btn-sm">Clear filters</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+</div>
+
+</body>
+</html>
