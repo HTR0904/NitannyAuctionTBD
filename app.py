@@ -1,8 +1,14 @@
 from urllib.parse import urlparse
-from flask import Flask, flash, render_template, request, redirect, session, url_for
-import sqlite3 as sql
+from flask import Flask, flash, render_template, request, redirect, send_file, session, url_for
+import csv
 import hashlib
+import io
+import sqlite3 as sql
 import uuid
+import zipfile
+from datetime import datetime
+from xml.sax.saxutils import escape
+
 app = Flask(__name__)
 
 # Allows HTML pages to be updated by refreshing without having to rerun the code
@@ -12,234 +18,547 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.secret_key = 'projectTBD_secret_key'
 
 host = 'http://127.0.0.1:5000/'
+DB_NAME = "dataset_tables.db"
+USERS_TABLE = "app_users"
+CATEGORIES_TABLE = "app_categories"
+TICKETS_TABLE = "app_helpdesk_tickets"
+
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
+
+def get_connection(row_factory=False):
+    conn = sql.connect(DB_NAME)
+    if row_factory:
+        conn.row_factory = sql.Row
+    return conn
+
+
+def ensure_admin_schema():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.executescript(
+        f"""
+        CREATE TABLE IF NOT EXISTS {USERS_TABLE} (
+            email TEXT PRIMARY KEY,
+            full_name TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('bidder', 'seller', 'helpdesk')),
+            user_status TEXT NOT NULL DEFAULT 'Active',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS {CATEGORIES_TABLE} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT NOT NULL,
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS {TICKETS_TABLE} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender_email TEXT NOT NULL,
+            assigned_email TEXT NOT NULL,
+            category_name TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            description TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'Open',
+            priority TEXT NOT NULL DEFAULT 'Medium',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        """
+    )
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    seed_users = [
+        ("bidder@nittanyauction.com", "Campus Bidder", hash_password("password123"), "bidder"),
+        ("seller@nittanyauction.com", "Campus Seller", hash_password("password123"), "seller"),
+        ("helpdesk@nittanyauction.com", "Helpdesk Admin", hash_password("password123"), "helpdesk"),
+    ]
+    for email, full_name, password_hash, role in seed_users:
+        cursor.execute(
+            f"""
+            INSERT OR IGNORE INTO {USERS_TABLE} (email, full_name, password_hash, role, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (email, full_name, password_hash, role, now),
+        )
+
+    seed_categories = [
+        ("Electronics", "Devices, gadgets, and peripherals."),
+        ("Books", "Textbooks, novels, and study materials."),
+        ("Furniture", "Dorm and apartment furniture."),
+        ("Helpdesk", "Account, listing, and system support requests."),
+    ]
+    for name, description in seed_categories:
+        cursor.execute(
+            f"""
+            INSERT OR IGNORE INTO {CATEGORIES_TABLE} (name, description, created_by, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (name, description, "helpdesk@nittanyauction.com", now),
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def resolve_full_name(email):
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT first_name, last_name FROM Bidders WHERE email = ?", (email,))
+        bidder = cursor.fetchone()
+        if bidder:
+            first_name = bidder[0] or ""
+            last_name = bidder[1] or ""
+            name = f"{first_name} {last_name}".strip()
+            if name:
+                return name
+    except sql.Error:
+        pass
+    finally:
+        conn.close()
+    return email.split("@")[0].replace(".", " ").title()
+
+
+def ensure_app_user(email, role):
+    ensure_admin_schema()
+    conn = get_connection(row_factory=True)
+    cursor = conn.cursor()
+    try:
+        password_row = cursor.execute(
+            "SELECT password_hash FROM User_Login WHERE email = ?",
+            (email,),
+        ).fetchone()
+        password_hash = password_row["password_hash"] if password_row else hash_password("password123")
+        cursor.execute(
+            f"""
+            INSERT OR IGNORE INTO {USERS_TABLE} (email, full_name, password_hash, role, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                email,
+                resolve_full_name(email),
+                password_hash,
+                role,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            ),
+        )
+        cursor.execute(f"UPDATE {USERS_TABLE} SET role = ? WHERE email = ?", (role, email))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_app_user(email):
+    ensure_admin_schema()
+    conn = get_connection(row_factory=True)
+    user = conn.execute(f"SELECT * FROM {USERS_TABLE} WHERE email = ?", (email,)).fetchone()
+    conn.close()
+    return user
+
+
+def authenticate_app_user(email, password, role):
+    user = get_app_user(email)
+    return bool(user and user["password_hash"] == hash_password(password) and user["role"] == role)
+
+
+def create_helpdesk_account(full_name, email, password, role):
+    if not all([full_name, email, password, role]):
+        return False, "Please complete all account creation fields."
+
+    ensure_admin_schema()
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            f"""
+            INSERT INTO {USERS_TABLE} (email, full_name, password_hash, role, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (email, full_name, hash_password(password), role, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        )
+        conn.commit()
+        return True, "Account created successfully."
+    except sql.IntegrityError:
+        return False, "An account with that email already exists."
+    finally:
+        conn.close()
+
+
+def collect_helpdesk_context():
+    ensure_admin_schema()
+    conn = get_connection(row_factory=True)
+    users = conn.execute(
+        f"SELECT email, full_name, role, user_status, created_at FROM {USERS_TABLE} ORDER BY created_at DESC"
+    ).fetchall()
+    categories = conn.execute(
+        f"SELECT id, name, description, created_by, created_at FROM {CATEGORIES_TABLE} ORDER BY name"
+    ).fetchall()
+    tickets = conn.execute(
+        f"""
+        SELECT id, sender_email, assigned_email, category_name, subject, description, status, priority,
+               created_at, updated_at
+        FROM {TICKETS_TABLE}
+        ORDER BY created_at DESC
+        """
+    ).fetchall()
+    conn.close()
+
+    metrics = {
+        "total_users": len(users),
+        "open_tickets": sum(1 for ticket in tickets if ticket["status"] != "Closed"),
+        "categories": len(categories),
+        "staff_members": sum(1 for user in users if user["role"] == "helpdesk"),
+    }
+    return {"users": users, "categories": categories, "tickets": tickets, "metrics": metrics}
+
+
+def build_export_rows():
+    ensure_admin_schema()
+    conn = get_connection(row_factory=True)
+    rows = conn.execute(
+        f"""
+        SELECT
+            t.id AS ticket_id,
+            t.subject,
+            t.category_name,
+            t.status,
+            t.priority,
+            t.created_at,
+            t.updated_at,
+            sender.full_name AS sender_name,
+            sender.email AS sender_email,
+            sender.role AS sender_role,
+            sender.user_status AS sender_status,
+            t.assigned_email,
+            c.description AS category_description
+        FROM {TICKETS_TABLE} t
+        LEFT JOIN {USERS_TABLE} sender ON sender.email = t.sender_email
+        LEFT JOIN {CATEGORIES_TABLE} c ON c.name = t.category_name
+        ORDER BY t.created_at DESC
+        """
+    ).fetchall()
+    conn.close()
+
+    export_rows = []
+    for row in rows:
+        export_rows.append(
+            {
+                "Ticket ID": row["ticket_id"],
+                "Subject": row["subject"],
+                "Ticket Category": row["category_name"],
+                "Ticket Status": row["status"],
+                "Priority": row["priority"],
+                "Created At": row["created_at"],
+                "Updated At": row["updated_at"],
+                "Sender Name": row["sender_name"] or "Unknown",
+                "Sender Email": row["sender_email"] or "Unknown",
+                "Sender Role": row["sender_role"] or "Unknown",
+                "Sender Status": row["sender_status"] or "Unknown",
+                "Assigned Staff": row["assigned_email"],
+                "Category Description": row["category_description"] or "",
+            }
+        )
+    return export_rows
+
+
+def build_csv_bytes(rows):
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=list(rows[0].keys()) if rows else ["Message"])
+    writer.writeheader()
+    if rows:
+        writer.writerows(rows)
+    else:
+        writer.writerow({"Message": "No records available"})
+    return io.BytesIO(buffer.getvalue().encode("utf-8"))
+
+
+def build_xlsx_bytes(rows):
+    headers = list(rows[0].keys()) if rows else ["Message"]
+    data_rows = rows if rows else [{"Message": "No records available"}]
+
+    def col_name(index):
+        result = ""
+        while index:
+            index, remainder = divmod(index - 1, 26)
+            result = chr(65 + remainder) + result
+        return result
+
+    shared_strings = []
+    shared_index = {}
+
+    def string_id(value):
+        if value not in shared_index:
+            shared_index[value] = len(shared_strings)
+            shared_strings.append(value)
+        return shared_index[value]
+
+    sheet_rows = []
+    all_rows = [headers] + [[str(row.get(header, "")) for header in headers] for row in data_rows]
+    for row_number, values in enumerate(all_rows, start=1):
+        cells = []
+        for column_number, value in enumerate(values, start=1):
+            cells.append(f'<c r="{col_name(column_number)}{row_number}" t="s"><v>{string_id(value)}</v></c>')
+        sheet_rows.append(f'<row r="{row_number}">{"".join(cells)}</row>')
+
+    worksheet_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        f'<sheetData>{"".join(sheet_rows)}</sheetData></worksheet>'
+    )
+    shared_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        f'count="{len(shared_strings)}" uniqueCount="{len(shared_strings)}">'
+        + "".join(f"<si><t>{escape(value)}</t></si>" for value in shared_strings)
+        + "</sst>"
+    )
+    workbook_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<sheets><sheet name="Helpdesk Export" sheetId="1" r:id="rId1"/></sheets></workbook>'
+    )
+    workbook_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+        'Target="worksheets/sheet1.xml"/>'
+        '<Relationship Id="rId2" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" '
+        'Target="sharedStrings.xml"/></Relationships>'
+    )
+    root_rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" '
+        'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+        'Target="xl/workbook.xml"/></Relationships>'
+    )
+    content_types = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/xl/workbook.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        '<Override PartName="/xl/worksheets/sheet1.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        '<Override PartName="/xl/sharedStrings.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/></Types>'
+    )
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as workbook:
+        workbook.writestr("[Content_Types].xml", content_types)
+        workbook.writestr("_rels/.rels", root_rels)
+        workbook.writestr("xl/workbook.xml", workbook_xml)
+        workbook.writestr("xl/_rels/workbook.xml.rels", workbook_rels)
+        workbook.writestr("xl/worksheets/sheet1.xml", worksheet_xml)
+        workbook.writestr("xl/sharedStrings.xml", shared_xml)
+    output.seek(0)
+    return output
+
+
 @app.route('/')
 def index():
-    #Checks for session first
+    ensure_admin_schema()
     if 'user_email' in session and 'account_type' in session:
-        # if session exists, instantly redirect to specific dashboard
         return redirect(session['account_type'])
-    #Otherwise, render the login page
     return render_template('login.html')
+
 
 @app.route('/logout')
 def logout():
-    """
-    With session, the browser will now remember login even after we terminate the server
-    Session will remain until you close the browser window
-    In case of errors or to kill the session without logout fully implemented:
-    Type the following into your browser's URL bar: http://127.0.0.1:5000/logout
-    """
     session.clear()
-    return render_template('login.html')
+    return redirect('/')
+
 
 @app.route('/login_bidder', methods=['POST'])
 def login_user():
+    ensure_admin_schema()
     username = request.form.get('bidder_email')
     password = request.form.get('bidder_password')
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-
-    cursor.execute("""
-                   SELECT password_hash
-                   FROM User_Login
-                   WHERE email = ?
-                   """, (username,))
+    cursor.execute("SELECT password_hash FROM User_Login WHERE email = ?", (username,))
     user = cursor.fetchone()
-    # check if credentials match, if not return an error like  "Invalid username or password."
     if user is None:
+        if authenticate_app_user(username, password, 'bidder'):
+            session['user_email'] = username
+            session['account_type'] = '/bidder'
+            return redirect('/bidder')
         conn.close()
         return render_template('login.html', error="Invalid username or password")
 
-    stored_hash = user[0]
-    if hash_password(password) != stored_hash:
+    if hash_password(password) != user[0]:
         conn.close()
         return render_template('login.html', error="Invalid username or password")
 
-    # Check user account type (bidder or seller) and determine which HTML page to redirect them to it:
-    cursor.execute("""
-                   SELECT email
-                   FROM Bidders
-                   WHERE email = ?
-                   """, (username,))
+    cursor.execute("SELECT email FROM Bidders WHERE email = ?", (username,))
     if cursor.fetchone():
         conn.close()
-
-        # Needed for session: store the user's email
+        ensure_app_user(username, 'bidder')
         session['user_email'] = username
         session['account_type'] = '/bidder'
         return redirect('/bidder')
 
-    # Else, if account exists with these credential exists but no valid accounts type found (i.e. a helpdesk staff). Throw an error:
     conn.close()
     return render_template('login.html', error="Not a valid bidder account")
 
+
 @app.route('/login_seller', methods=['POST'])
 def login_seller():
+    ensure_admin_schema()
     seller_username = request.form.get('seller_email')
     seller_password = request.form.get('seller_password')
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-
-    cursor.execute("""
-                   SELECT password_hash
-                   FROM User_Login
-                   WHERE email = ?
-                   """, (seller_username,))
-
+    cursor.execute("SELECT password_hash FROM User_Login WHERE email = ?", (seller_username,))
     user = cursor.fetchone()
 
     if user is None:
+        if authenticate_app_user(seller_username, seller_password, 'seller'):
+            session['user_email'] = seller_username
+            session['account_type'] = '/seller'
+            return redirect('/seller')
         conn.close()
         return render_template('login.html', error="Invalid login")
 
-    stored_hash = user[0]
-
-    # check if credentials match, if not return an error
-    if hash_password(seller_password) != stored_hash:
+    if hash_password(seller_password) != user[0]:
         conn.close()
         return render_template('login.html', error="Invalid login")
 
-    # Check user account type is a helpdesk account then redirect them to the HTML page.
-    cursor.execute("""
-                   SELECT email
-                   FROM Sellers
-                   WHERE email = ?
-                   """, (seller_username,))
+    cursor.execute("SELECT email FROM Sellers WHERE email = ?", (seller_username,))
     if cursor.fetchone():
         conn.close()
-
-        #Needed for session
+        ensure_app_user(seller_username, 'seller')
         session['user_email'] = seller_username
         session['account_type'] = '/seller'
         return redirect('/seller')
 
-    # Else, if account exists with these credential but is not a helpdesk staff (i.e. this is a regular user). Throw an error:
     conn.close()
     return render_template('login.html', error="Not a valid seller account")
 
+
 @app.route('/login_helpdesk', methods=['POST'])
 def login_helpdesk():
+    ensure_admin_schema()
     helpdesk_username = request.form.get('helpdesk_email')
     helpdesk_password = request.form.get('helpdesk_password')
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-
-    cursor.execute("""
-                   SELECT password_hash
-                   FROM User_Login
-                   WHERE email = ?
-                   """, (helpdesk_username,))
-
+    cursor.execute("SELECT password_hash FROM User_Login WHERE email = ?", (helpdesk_username,))
     user = cursor.fetchone()
 
     if user is None:
+        if authenticate_app_user(helpdesk_username, helpdesk_password, 'helpdesk'):
+            session['user_email'] = helpdesk_username
+            session['account_type'] = '/helpdesk'
+            return redirect('/helpdesk')
         conn.close()
         return render_template('login.html', error="Invalid login")
 
-    stored_hash = user[0]
-
-    # check if credentials match, if not return an error
-    if hash_password(helpdesk_password) != stored_hash:
+    if hash_password(helpdesk_password) != user[0]:
         conn.close()
         return render_template('login.html', error="Invalid login")
 
-    # Check user account type is a helpdesk account then redirect them to the HTML page.
-    cursor.execute("""
-                   SELECT email
-                   FROM Helpdesk
-                   WHERE email = ?
-                   """, (helpdesk_username,))
+    cursor.execute("SELECT email FROM Helpdesk WHERE email = ?", (helpdesk_username,))
     if cursor.fetchone():
         conn.close()
-        # Needed for session
+        ensure_app_user(helpdesk_username, 'helpdesk')
         session['user_email'] = helpdesk_username
         session['account_type'] = '/helpdesk'
         return redirect('/helpdesk')
 
-    # Else, if account exists with these credential but is not a helpdesk staff (i.e. this is a regular user). Throw an error:
     conn.close()
     return render_template('login.html', error="Not a helpdesk account")
 
 
 @app.route('/change_password', methods=['POST'])
 def change_password():
-
     user_email = session['user_email']
     current_password = request.form.get('current_password')
     new_password = request.form.get('new_password')
     confirm_new_password = request.form.get('confirm_new_password')
 
-    # Parse the referrer URL into a template filename (e.g., '/seller' -> 'seller.html')
-    # Defaults to 'dev_test.html' if the referrer is the root path '/'
     raw_path = urlparse(request.referrer).path.strip('/')
     template_name = f"{raw_path}.html" if raw_path else "dev_test.html"
-
     if new_password != confirm_new_password:
         return render_template(template_name, password_error="New passwords do not match.")
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-
     try:
-        cursor.execute('''SELECT password_hash 
-                          FROM User_Login 
-                          WHERE email = ?
-                        ''', (user_email,))
+        cursor.execute("SELECT password_hash FROM User_Login WHERE email = ?", (user_email,))
         user = cursor.fetchone()
-
         if user and user[0] == hash_password(current_password):
-            cursor.execute('''
-                           UPDATE User_Login
-                           SET password_hash = ?
-                           WHERE email = ?
-                           ''', (hash_password(new_password), user_email))
+            cursor.execute("UPDATE User_Login SET password_hash = ? WHERE email = ?", (hash_password(new_password), user_email))
             conn.commit()
-
             return render_template(template_name, password_success="Your password has been updated successfully.")
-        else:
-            return render_template(template_name, password_error="Incorrect current password.")
-
+        return render_template(template_name, password_error="Incorrect current password.")
     except sql.Error as e:
         print(f"Database error: {e}")
         return render_template(template_name, password_error="An error occurred while updating your password.")
     finally:
         conn.close()
 
+
 @app.route('/submit_ticket', methods=['POST'])
 def submit_ticket():
-
+    ensure_admin_schema()
     sender_email = session['user_email']
-
     req_type = request.form.get('request_type')
     req_desc = request.form.get('request_desc')
-
+    req_subject = request.form.get('request_subject', '').strip() or f"{req_type} request"
+    priority = request.form.get('priority', 'Medium').strip() or 'Medium'
     initial_status = 0
     default_staff_email = 'unassigned@helpdesk.com'
 
-    # Parse the referrer URL into a template filename
     raw_path = urlparse(request.referrer).path.strip('/')
     template_name = f"{raw_path}.html" if raw_path else "dev_test.html"
-
-    print(template_name)
-
     if not req_type or not req_desc:
         return render_template(template_name, helpdesk_req_error="Please fill out all helpdesk fields.")
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-
     try:
-        cursor.execute('''
-                       INSERT INTO Requests (sender_email, helpdesk_staff_email, request_type, request_desc,
-                                             request_status)
-                       VALUES (?, ?, ?, ?, ?)
-                       ''', (sender_email, default_staff_email, req_type, req_desc, initial_status))
+        cursor.execute(
+            '''
+            INSERT INTO Requests (sender_email, helpdesk_staff_email, request_type, request_desc, request_status)
+            VALUES (?, ?, ?, ?, ?)
+            ''',
+            (sender_email, default_staff_email, req_type, req_desc, initial_status),
+        )
+        cursor.execute(
+            f'''
+            INSERT INTO {TICKETS_TABLE} (
+                sender_email, assigned_email, category_name, subject, description,
+                status, priority, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                sender_email,
+                default_staff_email,
+                req_type,
+                req_subject,
+                req_desc,
+                'Open',
+                priority,
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            ),
+        )
         conn.commit()
         return render_template(template_name, helpdesk_req_success="Your request has been submitted successfully!")
     except sql.Error as e:
@@ -247,9 +566,12 @@ def submit_ticket():
         return render_template(template_name, helpdesk_req_error="An error occurred while submitting your request.")
     finally:
         conn.close()
+
+
 @app.route('/bidder')
 def bidder():
     return render_template('bidders_home.html')
+
 
 @app.route('/seller')
 @app.route('/seller')
@@ -258,35 +580,23 @@ def seller():
         return redirect('/')
 
     seller_email = session['user_email']
-
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-
-    #search categories
     cursor.execute("SELECT category_name FROM Categories ORDER BY category_name")
-    categories = [r[0] for r in cursor.fetchall()]
-
-    #search goods, price
-    cursor.execute('''
-        SELECT 
-            al.Listing_ID,
-            al.Auction_Title,
-            al.Product_Name,
-            al.Category,
-            al.Reserve_Price,
-            al.Max_bids,
-            al.Status,
-            COUNT(b.Bid_ID) AS bid_count,
-            MAX(b.Bid_Price) AS current_bid
+    categories = [row[0] for row in cursor.fetchall()]
+    cursor.execute(
+        '''
+        SELECT
+            al.Listing_ID, al.Auction_Title, al.Product_Name, al.Category, al.Reserve_Price,
+            al.Max_bids, al.Status, COUNT(b.Bid_ID) AS bid_count, MAX(b.Bid_Price) AS current_bid
         FROM Auction_Listings al
-        LEFT JOIN Bids b 
-            ON al.Listing_ID = b.Listing_ID 
-            AND al.Seller_Email = b.Seller_Email
+        LEFT JOIN Bids b ON al.Listing_ID = b.Listing_ID AND al.Seller_Email = b.Seller_Email
         WHERE al.Seller_Email = ?
         GROUP BY al.Listing_ID
         ORDER BY al.Status DESC, al.Listing_ID DESC
-    ''', (seller_email,))
-
+        ''',
+        (seller_email,),
+    )
     my_listings = []
     for row in cursor.fetchall():
         my_listings.append({
@@ -298,16 +608,14 @@ def seller():
             'max_bids': row[5],
             'status': row[6],
             'bid_count': row[7],
-            'current_bid': row[8]
+            'current_bid': row[8],
         })
-
     conn.close()
-    return render_template('seller_home.html',
-                           categories=categories,
-                           my_listings=my_listings)
+    return render_template('seller_home.html', categories=categories, my_listings=my_listings)
+
+
 @app.route('/list_product', methods=['POST'])
 def list_product():
-    #only seller upload
     if 'user_email' not in session or session.get('account_type') != '/seller':
         return redirect('/')
 
@@ -321,18 +629,16 @@ def list_product():
     max_bids = request.form.get('max_bids')
 
     def render_seller(**kwargs):
-        conn = sql.connect("dataset_tables.db")
+        conn = sql.connect(DB_NAME)
         cursor = conn.cursor()
         cursor.execute("SELECT category_name FROM Categories ORDER BY category_name")
-        cats = [r[0] for r in cursor.fetchall()]
+        cats = [row[0] for row in cursor.fetchall()]
         conn.close()
         return render_template('seller_home.html', categories=cats, **kwargs)
 
-    #verify required
     if not all([auction_title, product_name, product_description, category, reserve_price, quantity, max_bids]):
         return render_seller(listing_error="Please fill out all required fields.")
 
-    #verify num
     try:
         reserve_price_num = float(reserve_price)
         quantity_int = int(quantity)
@@ -342,25 +648,22 @@ def list_product():
     except ValueError:
         return render_seller(listing_error="Please enter valid numbers.")
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-
     try:
         formatted_price = f"${reserve_price_num:,.2f}"
-
-        cursor.execute('''
-            INSERT INTO Auction_Listings 
-            (Seller_Email, Category, Auction_Title, Product_Name, Product_Description, 
+        cursor.execute(
+            '''
+            INSERT INTO Auction_Listings
+            (Seller_Email, Category, Auction_Title, Product_Name, Product_Description,
              Quantity, Reserve_Price, Max_bids, Status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-        ''', (seller_email, category, auction_title, product_name, product_description,
-              quantity_int, formatted_price, max_bids_int))
-
+            ''',
+            (seller_email, category, auction_title, product_name, product_description, quantity_int, formatted_price, max_bids_int),
+        )
         new_listing_id = cursor.lastrowid
         conn.commit()
-
         return render_seller(listing_success=f"Listing created successfully! Listing ID: {new_listing_id}")
-
     except sql.Error as e:
         conn.rollback()
         print(f"List product DB error: {e}")
@@ -368,45 +671,180 @@ def list_product():
     finally:
         conn.close()
 
+
+@app.route('/helpdesk/create_account', methods=['POST'])
+def create_helpdesk_account_route():
+    if 'user_email' not in session or session.get('account_type') != '/helpdesk':
+        flash("You must be logged in as helpdesk to manage admin tools.", "auth_error")
+        return redirect(url_for('index'))
+    full_name = request.form.get('full_name', '').strip()
+    email = request.form.get('email', '').strip().lower()
+    password = request.form.get('password', '')
+    role = request.form.get('role', 'bidder').strip()
+    created, message = create_helpdesk_account(full_name, email, password, role)
+    flash(message, 'success' if created else 'danger')
+    return redirect('/helpdesk')
+
+
+@app.route('/helpdesk/create_category', methods=['POST'])
+def create_category():
+    if 'user_email' not in session or session.get('account_type') != '/helpdesk':
+        flash("You must be logged in as helpdesk to manage categories.", "auth_error")
+        return redirect(url_for('index'))
+    name = request.form.get('category_name', '').strip()
+    description = request.form.get('category_description', '').strip()
+    if not name or not description:
+        flash("Please provide both a category name and description.", "danger")
+        return redirect('/helpdesk')
+
+    ensure_admin_schema()
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            f"INSERT INTO {CATEGORIES_TABLE} (name, description, created_by, created_at) VALUES (?, ?, ?, ?)",
+            (name, description, session['user_email'], datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        )
+        conn.commit()
+        flash("Category created successfully.", "success")
+    except sql.IntegrityError:
+        flash("That category already exists.", "danger")
+    finally:
+        conn.close()
+    return redirect('/helpdesk')
+
+
+@app.route('/helpdesk/update_user', methods=['POST'])
+def update_user():
+    if 'user_email' not in session or session.get('account_type') != '/helpdesk':
+        flash("You must be logged in as helpdesk to update users.", "auth_error")
+        return redirect(url_for('index'))
+    email = request.form.get('user_email', '').strip().lower()
+    full_name = request.form.get('full_name', '').strip()
+    role = request.form.get('role', '').strip()
+    user_status = request.form.get('user_status', '').strip()
+    if not email:
+        flash("Please select a user email to update.", "danger")
+        return redirect('/helpdesk')
+
+    ensure_admin_schema()
+    conn = get_connection()
+    result = conn.execute(
+        f"""
+        UPDATE {USERS_TABLE}
+        SET full_name = COALESCE(NULLIF(?, ''), full_name),
+            role = COALESCE(NULLIF(?, ''), role),
+            user_status = COALESCE(NULLIF(?, ''), user_status)
+        WHERE email = ?
+        """,
+        (full_name, role, user_status, email),
+    )
+    conn.commit()
+    conn.close()
+    flash("User account updated." if result.rowcount else "No matching user account was found.",
+          "success" if result.rowcount else "danger")
+    return redirect('/helpdesk')
+
+
+@app.route('/helpdesk/update_ticket/<int:ticket_id>', methods=['POST'])
+def update_ticket(ticket_id):
+    if 'user_email' not in session or session.get('account_type') != '/helpdesk':
+        flash("You must be logged in as helpdesk to update tickets.", "auth_error")
+        return redirect(url_for('index'))
+    status = request.form.get('status', '').strip()
+    assigned_email = request.form.get('assigned_email', '').strip() or session['user_email']
+    priority = request.form.get('priority', '').strip()
+
+    ensure_admin_schema()
+    conn = get_connection()
+    result = conn.execute(
+        f"""
+        UPDATE {TICKETS_TABLE}
+        SET status = COALESCE(NULLIF(?, ''), status),
+            assigned_email = COALESCE(NULLIF(?, ''), assigned_email),
+            priority = COALESCE(NULLIF(?, ''), priority),
+            updated_at = ?
+        WHERE id = ?
+        """,
+        (status, assigned_email, priority, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ticket_id),
+    )
+    conn.commit()
+    conn.close()
+    flash(f"Ticket #{ticket_id} updated." if result.rowcount else "Ticket not found.",
+          "success" if result.rowcount else "danger")
+    return redirect('/helpdesk')
+
+
+@app.route('/helpdesk/export/<fmt>')
+def export_helpdesk(fmt):
+    if 'user_email' not in session or session.get('account_type') != '/helpdesk':
+        flash("You must be logged in as helpdesk to export data.", "auth_error")
+        return redirect(url_for('index'))
+    rows = build_export_rows()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if fmt == 'csv':
+        return send_file(build_csv_bytes(rows), mimetype='text/csv', as_attachment=True,
+                         download_name=f'helpdesk_export_{timestamp}.csv')
+    if fmt == 'xlsx':
+        return send_file(
+            build_xlsx_bytes(rows),
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'helpdesk_export_{timestamp}.xlsx',
+        )
+    flash("Unsupported export format.", "danger")
+    return redirect('/helpdesk')
+
+
 @app.route('/helpdesk')
 def helpdesk():
-    return render_template('helpdesk_home.html')
+    if 'user_email' not in session or session.get('account_type') != '/helpdesk':
+        flash("Please log in to continue.", "auth_error")
+        return redirect(url_for('index'))
+    ensure_app_user(session['user_email'], 'helpdesk')
+    context = collect_helpdesk_context()
+    context["current_user"] = get_app_user(session['user_email'])
+    return render_template('helpdesk_home.html', **context)
+
 
 #TODO: reconsolidate this with actual listing logic
 @app.route('/listing/<int:listing_id>')
 def view_listing(listing_id):
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-    # Grab the actual listing using the listing_id
-    cursor.execute('''SELECT * 
-                      FROM Auction_Listings 
-                      WHERE Listing_ID = ?
-                   ''', (listing_id,))
+    cursor.execute(
+        '''
+        SELECT *
+        FROM Auction_Listings
+        WHERE Listing_ID = ?
+        ''',
+        (listing_id,),
+    )
     listing = cursor.fetchone()
 
     if not listing:
         conn.close()
-        return "Listing not found", 404 # 404 will trigger acutal browser behaviour
+        return "Listing not found", 404
 
-    # Check watchlist status:
     is_watching = False
     if 'user_email' in session and session.get('account_type') == '/bidder':
-        cursor.execute('''
-                       SELECT 1
-                       FROM Watchlist
-                       WHERE Bidder_Email = ?
-                         AND Listing_ID = ?
-                       ''', (session['user_email'], listing_id))
+        cursor.execute(
+            '''
+            SELECT 1
+            FROM Watchlist
+            WHERE Bidder_Email = ?
+              AND Listing_ID = ?
+            ''',
+            (session['user_email'], listing_id),
+        )
         is_watching = bool(cursor.fetchone())
 
     conn.close()
-
-    # TODO: update html to be an actual one and not dev_test
     return render_template('dev_test.html', listing=listing, is_watching=is_watching)
+
 
 @app.route('/toggle_watchlist', methods=['POST'])
 def toggle_watchlist():
-    # Security: Ensure only bidders can watch
     if 'user_email' not in session or session.get('account_type') != '/bidder':
         flash("You must be logged in as a bidder to use the watchlist.", "auth_error")
         return redirect(url_for('index'))
@@ -415,33 +853,37 @@ def toggle_watchlist():
     listing_id = request.form.get('listing_id')
     seller_email = request.form.get('seller_email')
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-
     try:
-        # Check status (watching or not)
-        cursor.execute('''
-                       SELECT 1
-                       FROM Watchlist
-                       WHERE Bidder_Email = ?
-                         AND Listing_ID = ?
-                       ''', (bidder_email, listing_id))
+        cursor.execute(
+            '''
+            SELECT 1
+            FROM Watchlist
+            WHERE Bidder_Email = ?
+              AND Listing_ID = ?
+            ''',
+            (bidder_email, listing_id),
+        )
 
         if cursor.fetchone():
-            # UNWATCH
-            cursor.execute('''
-                           DELETE
-                           FROM Watchlist
-                           WHERE Bidder_Email = ?
-                             AND Listing_ID = ?
-                           ''', (bidder_email, listing_id))
+            cursor.execute(
+                '''
+                DELETE FROM Watchlist
+                WHERE Bidder_Email = ?
+                  AND Listing_ID = ?
+                ''',
+                (bidder_email, listing_id),
+            )
             flash("Listing removed from your watchlist.", "watch_success")
         else:
-            # WATCH
-            cursor.execute('''
-                           INSERT INTO Watchlist (Bidder_Email, Listing_ID, Seller_Email)
-                           VALUES (?, ?, ?)
-                           ''', (bidder_email, listing_id, seller_email))
+            cursor.execute(
+                '''
+                INSERT INTO Watchlist (Bidder_Email, Listing_ID, Seller_Email)
+                VALUES (?, ?, ?)
+                ''',
+                (bidder_email, listing_id, seller_email),
+            )
             flash("Listing added to your watchlist!", "watch_success")
 
         conn.commit()
@@ -453,13 +895,13 @@ def toggle_watchlist():
 
     return redirect(request.referrer)
 
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    #show the registration page
+    ensure_admin_schema()
     if request.method == 'GET':
         return render_template('register.html')
 
-    #process the registration form
     role = request.form.get('role')
     email = request.form.get('email', '').strip().lower()
     password = request.form.get('password')
@@ -468,93 +910,73 @@ def register():
     last_name = request.form.get('last_name', '').strip()
     age = request.form.get('age')
     major = request.form.get('major', '').strip() or None
-
-    #optional address
     street_num = request.form.get('street_num')
     street_name = request.form.get('street_name', '').strip()
     zipcode = request.form.get('zipcode')
-
-    #seller fields
     bank_routing = request.form.get('bank_routing_number', '').strip()
     bank_account = request.form.get('bank_account_number')
 
-    #validation
     if not email or not password or not first_name or not last_name:
-        return render_template('register.html',
-                               error="Please fill out all required fields.")
-
+        return render_template('register.html', error="Please fill out all required fields.")
     if password != confirm_password:
-        return render_template('register.html',
-                               error="Passwords do not match.")
-
+        return render_template('register.html', error="Passwords do not match.")
     if len(password) < 6:
-        return render_template('register.html',
-                               error="Password must be at least 6 characters.")
-
+        return render_template('register.html', error="Password must be at least 6 characters.")
     if role not in ('bidder', 'seller'):
-        return render_template('register.html',
-                               error="Invalid account type selected.")
-
+        return render_template('register.html', error="Invalid account type selected.")
     if role == 'seller' and (not bank_routing or not bank_account):
-        return render_template('register.html',
-                               error="Sellers must provide banking information.")
+        return render_template('register.html', error="Sellers must provide banking information.")
 
-    #database
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-
     try:
-        #email is registered？
         cursor.execute("SELECT email FROM User_Login WHERE email = ?", (email,))
         if cursor.fetchone():
-            return render_template('register.html',
-                                   error="This email is already registered. Please log in instead.")
+            return render_template('register.html', error="This email is already registered. Please log in instead.")
 
-        #handle optional address
         home_address_id = None
         if street_num and street_name and zipcode:
             cursor.execute("SELECT zipcode FROM Zipcode_Info WHERE zipcode = ?", (zipcode,))
             if not cursor.fetchone():
-                return render_template('register.html',
-                                       error=f"Zipcode {zipcode} is not recognized in our system.")
+                return render_template('register.html', error=f"Zipcode {zipcode} is not recognized in our system.")
 
             home_address_id = uuid.uuid4().hex
-            cursor.execute('''
+            cursor.execute(
+                '''
                 INSERT INTO Address (address_id, zipcode, street_num, street_name)
                 VALUES (?, ?, ?, ?)
-            ''', (home_address_id, zipcode, street_num, street_name))
+                ''',
+                (home_address_id, zipcode, street_num, street_name),
+            )
 
-        #insert into User_Login
-        cursor.execute('''
-            INSERT INTO User_Login (email, password_hash)
-            VALUES (?, ?)
-        ''', (email, hash_password(password)))
-
-        #insert into role-specific tables
-        cursor.execute('''
+        cursor.execute("INSERT INTO User_Login (email, password_hash) VALUES (?, ?)", (email, hash_password(password)))
+        cursor.execute(
+            '''
             INSERT INTO Bidders (email, first_name, last_name, age, home_address_id, major)
             VALUES (?, ?, ?, ?, ?, ?)
-        ''', (email, first_name, last_name, age or None, home_address_id, major))
+            ''',
+            (email, first_name, last_name, age or None, home_address_id, major),
+        )
 
-        #if seller, insert into Sellers
         if role == 'seller':
-            cursor.execute('''
+            cursor.execute(
+                '''
                 INSERT INTO Sellers (email, bank_routing_number, bank_account_number, balance)
                 VALUES (?, ?, ?, 0)
-            ''', (email, bank_routing, bank_account))
+                ''',
+                (email, bank_routing, bank_account),
+            )
 
         conn.commit()
-
-        return render_template('register.html',
-                               success=f"Account created successfully as a {role}!")
-
+        ensure_app_user(email, role)
+        return render_template('register.html', success=f"Account created successfully as a {role}!")
     except sql.Error as e:
         conn.rollback()
         print(f"Registration database error: {e}")
-        return render_template('register.html',
-                               error="A database error occurred. Please try again.")
+        return render_template('register.html', error="A database error occurred. Please try again.")
     finally:
         conn.close()
+
 
 @app.route('/settings')
 def settings():
@@ -564,14 +986,15 @@ def settings():
     user_email = session['user_email']
     account_type_raw = session.get('account_type', '').strip('/')
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-
-    #search card
-    cursor.execute('''
+    cursor.execute(
+        '''
         SELECT credit_card_num, card_type, expire_month, expire_year
         FROM Credit_Cards WHERE Owner_email = ?
-    ''', (user_email,))
+        ''',
+        (user_email,),
+    )
     cards = []
     for row in cursor.fetchall():
         cards.append({
@@ -579,25 +1002,24 @@ def settings():
             'card_type': row[1].strip(),
             'expire_month': row[2],
             'expire_year': row[3],
-            'last_four': row[0].split('-')[-1]  # 只显示后 4 位
+            'last_four': row[0].split('-')[-1],
         })
 
-    #seller? bank info
-    cursor.execute("SELECT bank_routing_number, bank_account_number, balance FROM Sellers WHERE email = ?",
-                   (user_email,))
+    cursor.execute("SELECT bank_routing_number, bank_account_number, balance FROM Sellers WHERE email = ?", (user_email,))
     bank_row = cursor.fetchone()
     is_seller = bank_row is not None
 
     conn.close()
-
-    return render_template('settings.html',
-                           user_email=user_email,
-                           account_type=account_type_raw,
-                           cards=cards,
-                           is_seller=is_seller,
-                           bank_routing=bank_row[0] if bank_row else None,
-                           bank_account=bank_row[1] if bank_row else None,
-                           balance=bank_row[2] if bank_row else None)
+    return render_template(
+        'settings.html',
+        user_email=user_email,
+        account_type=account_type_raw,
+        cards=cards,
+        is_seller=is_seller,
+        bank_routing=bank_row[0] if bank_row else None,
+        bank_account=bank_row[1] if bank_row else None,
+        balance=bank_row[2] if bank_row else None,
+    )
 
 
 @app.route('/settings/add_card', methods=['POST'])
@@ -612,9 +1034,8 @@ def add_card():
     expire_year = request.form.get('expire_year')
     cvv = request.form.get('security_code')
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-
     try:
         cursor.execute("SELECT 1 FROM Credit_Cards WHERE credit_card_num = ?", (card_num,))
         if cursor.fetchone():
@@ -622,11 +1043,14 @@ def add_card():
             conn.close()
             return redirect('/settings')
 
-        cursor.execute('''
-            INSERT INTO Credit_Cards 
+        cursor.execute(
+            '''
+            INSERT INTO Credit_Cards
             (credit_card_num, card_type, expire_month, expire_year, security_code, Owner_email)
             VALUES (?, ?, ?, ?, ?, ?)
-        ''', (card_num, card_type, int(expire_month), int(expire_year), int(cvv), email))
+            ''',
+            (card_num, card_type, int(expire_month), int(expire_year), int(cvv), email),
+        )
         conn.commit()
         flash("Card added successfully!", "card_success")
     except sql.Error as e:
@@ -646,12 +1070,10 @@ def delete_card():
     email = session['user_email']
     card_num = request.form.get('credit_card_num')
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     try:
-        #can only delete self card
-        cursor.execute("DELETE FROM Credit_Cards WHERE credit_card_num=? AND Owner_email=?",
-                       (card_num, email))
+        cursor.execute("DELETE FROM Credit_Cards WHERE credit_card_num=? AND Owner_email=?", (card_num, email))
         conn.commit()
         flash("Card removed.", "card_success")
     except sql.Error:
@@ -671,7 +1093,7 @@ def update_bank():
     routing = request.form.get('bank_routing_number', '').strip()
     account = request.form.get('bank_account_number')
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT 1 FROM Sellers WHERE email = ?", (email,))
@@ -679,8 +1101,7 @@ def update_bank():
             flash("Only sellers can update bank info.", "bank_error")
             return redirect('/settings')
 
-        cursor.execute("UPDATE Sellers SET bank_routing_number=?, bank_account_number=? WHERE email=?",
-                       (routing, int(account), email))
+        cursor.execute("UPDATE Sellers SET bank_routing_number=?, bank_account_number=? WHERE email=?", (routing, int(account), email))
         conn.commit()
         flash("Bank info updated successfully!", "bank_success")
     except (sql.Error, ValueError) as e:
@@ -691,6 +1112,7 @@ def update_bank():
 
     return redirect('/settings')
 
+
 if __name__ == '__main__':
-    #app.run()
+    ensure_admin_schema()
     app.run(debug=True)  #enabled to run with TEMPLATES_AUTO_RELOAD
