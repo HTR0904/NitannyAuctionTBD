@@ -515,6 +515,10 @@ def change_password():
 
 @app.route('/submit_ticket', methods=['POST'])
 def submit_ticket():
+    if 'user_email' not in session:
+        flash("Please log in to submit a ticket.", "auth_error")
+        return redirect(url_for('index'))
+
     ensure_admin_schema()
     sender_email = session['user_email']
     req_type = request.form.get('request_type')
@@ -523,11 +527,9 @@ def submit_ticket():
     priority = request.form.get('priority', 'Medium').strip() or 'Medium'
     initial_status = 0
     default_staff_email = 'unassigned@helpdesk.com'
-
-    raw_path = urlparse(request.referrer).path.strip('/')
-    template_name = f"{raw_path}.html" if raw_path else "dev_test.html"
     if not req_type or not req_desc:
-        return render_template(template_name, helpdesk_req_error="Please fill out all helpdesk fields.")
+        flash("Please fill out all helpdesk fields.", "danger")
+        return redirect(request.referrer or session.get('account_type') or url_for('index'))
 
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
@@ -560,10 +562,12 @@ def submit_ticket():
             ),
         )
         conn.commit()
-        return render_template(template_name, helpdesk_req_success="Your request has been submitted successfully!")
+        flash("Your request has been submitted successfully!", "success")
+        return redirect(request.referrer or session.get('account_type') or url_for('index'))
     except sql.Error as e:
         print(f"Database error: {e}")
-        return render_template(template_name, helpdesk_req_error="An error occurred while submitting your request.")
+        flash("An error occurred while submitting your request.", "danger")
+        return redirect(request.referrer or session.get('account_type') or url_for('index'))
     finally:
         conn.close()
 
@@ -611,7 +615,12 @@ def seller():
             'current_bid': row[8],
         })
     conn.close()
-    return render_template('seller_home.html', categories=categories, my_listings=my_listings)
+    return render_template(
+        'seller_home.html',
+        categories=categories,
+        my_listings=my_listings,
+        current_user=get_app_user(session['user_email']),
+    )
 
 
 @app.route('/list_product', methods=['POST'])
@@ -634,7 +643,13 @@ def list_product():
         cursor.execute("SELECT category_name FROM Categories ORDER BY category_name")
         cats = [row[0] for row in cursor.fetchall()]
         conn.close()
-        return render_template('seller_home.html', categories=cats, **kwargs)
+        return render_template(
+            'seller_home.html',
+            categories=cats,
+            my_listings=[],
+            current_user=get_app_user(session['user_email']),
+            **kwargs,
+        )
 
     if not all([auction_title, product_name, product_description, category, reserve_price, quantity, max_bids]):
         return render_seller(listing_error="Please fill out all required fields.")

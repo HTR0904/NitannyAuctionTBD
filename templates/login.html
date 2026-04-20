@@ -3,126 +3,148 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
           integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
-
-    <style>
-        /* Custom Navy Styles */
-        .bg-navy { background-color: #001E44; }
-        .btn-navy {
-            background-color: #001E44;
-            border-color: #001E44;
-            color: #ffffff;
-        }
-    </style>
-
     <title>Login - Nittany Auction</title>
+    <style>
+        :root { --navy: #041e42; --navy-soft: #153d72; --mist: #dfe7f4; --slate: #5f6b7a; }
+        body { background: linear-gradient(135deg, #f5f7fb 0%, var(--mist) 100%); min-height: 100vh; }
+        .btn-navy { background-color: var(--navy); border-color: var(--navy); color: #fff; }
+        .btn-navy:hover { background-color: var(--navy-soft); border-color: var(--navy-soft); color: #fff; }
+        .hero-shell { border-radius: 28px; overflow: hidden; box-shadow: 0 24px 60px rgba(4, 30, 66, 0.15); }
+        .hero-side {
+            background:
+                radial-gradient(circle at top right, rgba(242, 197, 92, 0.35), transparent 32%),
+                linear-gradient(180deg, rgba(4, 30, 66, 0.94), rgba(7, 43, 93, 0.96));
+            color: white;
+        }
+        .portal-card { border: 0; border-radius: 18px; box-shadow: 0 15px 35px rgba(4, 30, 66, 0.08); }
+        .portal-label { color: var(--slate); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; }
+        .example-pill { display: inline-block; margin-top: 0.25rem; margin-right: 0.35rem; padding: 0.25rem 0.55rem; border-radius: 999px; background: #eef3fb; color: var(--navy); }
+    </style>
 </head>
-<body class="bg-light">
+<body>
+<div class="container py-5">
+    <div class="hero-shell bg-white">
+        <div class="row no-gutters">
+            <div class="col-lg-4 hero-side p-5 d-flex flex-column justify-content-center">
+                <div class="mb-4">
+                    <span class="badge badge-light px-3 py-2">Penn State Marketplace</span>
+                </div>
+                <h1 class="display-4 font-weight-bold mb-3">Nittany Auction</h1>
+                <p class="lead mb-4">Auction management for bidders, sellers, and helpdesk staff in one shared platform.</p>
+                <p class="mb-0">Demo accounts are preloaded with password <strong>password123</strong>.</p>
+            </div>
 
-<!-- Header Section -->
-<div class="header-section bg-navy text-center text-white">
-    <div class="container">
-        <h1 class="display-4 font-weight-bold">Nittany Auction</h1>
-        <p class="lead">Welcome! Please log in to your account.</p>
+            <div class="col-lg-8 p-4 p-md-5">
+                {% if error %}
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <strong>Error:</strong> {{ error }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                {% endif %}
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            {% if category == "auth_error" %}
+                            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                                <strong>Access Denied:</strong> {{ message }}
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <div class="portal-label">Secure Access</div>
+                        <h2 class="font-weight-bold mb-0">Choose your portal</h2>
+                    </div>
+                    <a href="/register" class="btn btn-outline-dark">Create account</a>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-4">
+                        <div class="card portal-card h-100">
+                            <div class="card-body">
+                                <div class="portal-label mb-2">Bidder</div>
+                                <h4 class="font-weight-bold">Browse and bid</h4>
+                                <p class="text-muted small">Access bidder tools and submit support requests from your dashboard.</p>
+                                <form action="/login_bidder" method="POST" class="mt-4">
+                                    <div class="form-group">
+                                        <input type="email" name="bidder_email" class="form-control" placeholder="Email address" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <input type="password" name="bidder_password" class="form-control" placeholder="Password" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-navy btn-block">Bidder Login</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4 mb-4">
+                        <div class="card portal-card h-100">
+                            <div class="card-body">
+                                <div class="portal-label mb-2">Seller</div>
+                                <h4 class="font-weight-bold">Manage listings</h4>
+                                <p class="text-muted small">Create listings, monitor results, and send category or support requests.</p>
+                                <form action="/login_seller" method="POST" class="mt-4">
+                                    <div class="form-group">
+                                        <input type="email" name="seller_email" class="form-control" placeholder="Email address" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <input type="password" name="seller_password" class="form-control" placeholder="Password" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-navy btn-block">Seller Login</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4 mb-4">
+                        <div class="card portal-card h-100">
+                            <div class="card-body">
+                                <div class="portal-label mb-2">Staff</div>
+                                <h4 class="font-weight-bold">Admin workspace</h4>
+                                <p class="text-muted small">Review tickets, update users, manage categories, and export reports.</p>
+                                <form action="/login_helpdesk" method="POST" class="mt-4">
+                                    <div class="form-group">
+                                        <input type="email" name="helpdesk_email" class="form-control" placeholder="Email address" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <input type="password" name="helpdesk_password" class="form-control" placeholder="Password" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-navy btn-block">Staff Login</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-muted small mt-2">
+                    Example emails:
+                    <span class="example-pill">bidder@nittanyauction.com</span>
+                    <span class="example-pill">seller@nittanyauction.com</span>
+                    <span class="example-pill">helpdesk@nittanyauction.com</span>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
-
-<!-- Error Banner for failed logins -->
-{% if error %}
-<div class="container">
-    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <strong>Error:</strong> {{ error }}
-        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-            <span aria-hidden="true">&times;</span> <!-- Close button -->
-        </button>
-    </div>
-</div>
-{% endif %}
-
-<!-- Errors sent by flash -->
-{% with messages = get_flashed_messages(category_filter=["auth_error"]) %}
-    {% if messages %}
-    <div class="container mt-3">
-        <div class="alert alert-warning alert-dismissible fade show" role="alert">
-            <strong>Access Denied:</strong> {{ messages[0] }}
-            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                <span aria-hidden="true">&times;</span>
-            </button>
-        </div>
-    </div>
-    {% endif %}
-{% endwith %}
-
-
-<!-- Login Portals -->
-<div class="container">
-    <div class = "row">
-
-        <!-- Login for bidder and seller -->
-        <div class = "col-sm">
-            <div class="card-body text-center">
-                <h3 class="card-title text-dark">Bidder Login</h3>
-                <p class="card-text text-muted">For Bidders</p>
-
-                <form action="/login_bidder" method="POST">
-                    <div class="form-group">
-                        <input type="email" name="bidder_email" class="form-control" placeholder="Email Address (User ID)" required>
-                    </div>
-                    <div class="form-group">
-                        <input type="password" name="bidder_password" class="form-control" placeholder="Password" required>
-                    </div>
-                    <button type="submit" class="btn btn-navy btn-block">Login</button>
-                </form>
-                <hr class="mt-4 mb-3">
-                <small>Don't have an account? <a href="/register">Register here</a></small>
-                </div>
-        </div>
-
-          <div class = "col-sm">
-            <div class="card-body text-center">
-                <h3 class="card-title text-dark">Seller Login</h3>
-                <p class="card-text text-muted">For Sellers</p>
-
-                <form action="/login_seller" method="POST">
-                    <div class="form-group">
-                        <input type="email" name="seller_email" class="form-control" placeholder="Email Address (User ID)" required>
-                    </div>
-                    <div class="form-group">
-                        <input type="password" name="seller_password" class="form-control" placeholder="Password" required>
-                    </div>
-                    <button type="submit" class="btn btn-navy btn-block">Login</button>
-                </form>
-                <hr class="mt-4 mb-3">
-                <small>Don't have an account? <a href="/register">Register here</a></small>
-                </div>
-        </div>
-
-        <!-- login for helpdesk staff -->
-        <div class = "col-sm">
-            <div class="card-body text-center">
-                <h3 class="card-title text-dark">Staff Login</h3>
-                <p class="card-text text-muted">For Our Staff Members</p>
-
-                <form action="/login_helpdesk" method="POST">
-                    <div class="form-group">
-                        <input type="email" name="helpdesk_email" class="form-control" placeholder="Email Address (User ID)" required>
-                    </div>
-                    <div class="form-group">
-                        <input type="password" name="helpdesk_password" class="form-control" placeholder="Password" required>
-                    </div>
-                    <button type="submit" class="btn btn-navy btn-block">Login</button>
-                </form>
-                <hr class="mt-4 mb-3">
-                 <small>For access, please contact your internal team.</small>
-                </div>
-        </div>
-    </div>
-
-</div>
-
-
 
 <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"
         integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n"

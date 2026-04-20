@@ -3,254 +3,325 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
           integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
-
     <title>Seller Home</title>
-
     <style>
-        .bg-navy { background-color: #041E42; }
-        .text-navy { color: #041E42; }
-        .btn-navy { background-color: #041E42; color: white; border: none; }
-
-        .navbar-profile-pic {
-            width: 32px;
-            height: 32px;
-            object-fit: cover;
+        :root { --navy: #041e42; --navy-soft: #153d72; --cloud: #eef3fb; }
+        body { background: linear-gradient(180deg, #f4f7fb, #ffffff); }
+        .bg-navy { background-color: var(--navy); }
+        .text-navy { color: var(--navy); }
+        .btn-navy { background-color: var(--navy); color: white; border: none; }
+        .btn-navy:hover { color: white; background-color: var(--navy-soft); }
+        .surface-card {
+            background: white;
+            border: 0;
+            border-radius: 22px;
+            box-shadow: 0 18px 42px rgba(4, 30, 66, 0.08);
         }
-
-        .seller-block {
-            background-color: white;
-            border: 1px solid #dee2e6;
-            border-radius: 0.25rem;
-            box-shadow: 0 .125rem .25rem rgba(0,0,0,.075);
+        .hero-panel {
+            background:
+                radial-gradient(circle at top right, rgba(242, 197, 92, 0.28), transparent 28%),
+                linear-gradient(135deg, rgba(4, 30, 66, 0.98), rgba(21, 61, 114, 0.95));
+            color: white;
+            border-radius: 28px;
+            overflow: hidden;
         }
-
-        .table th, .table td {
-            vertical-align: middle;
+        .table td, .table th { vertical-align: middle; }
+        .pill {
+            display: inline-block;
+            border-radius: 999px;
+            padding: 0.25rem 0.75rem;
+            background: var(--cloud);
+            color: var(--navy);
+            font-size: 0.85rem;
+            font-weight: 600;
         }
+        .quick-link {
+            display: inline-block;
+            margin-right: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 0.7rem 1rem;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+        .quick-link:hover { color: white; text-decoration: none; background: rgba(255, 255, 255, 0.2); }
     </style>
 </head>
-<body class="bg-light">
-
+<body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-navy">
     <div class="container">
         <a class="navbar-brand font-weight-bold" href="/seller">Nittany Auction</a>
-
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-
-        <div class="collapse navbar-collapse" id="navbarContent">
-
-            <form class="form-inline mx-auto my-2 my-lg-0">
-                <input class="form-control mr-sm-2" type="search" name="query" placeholder="Search" aria-label="Search" style="width: 350px">
-                <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Search</button>
-            </form>
-
-            <ul class="navbar-nav align-items-center">
-                <li class="nav-item">
-                    <a class="nav-link" href="#">My Listings</a>
-                </li>
-                <li class="nav-item mr-3">
-                    <a class="nav-link" href="/contact">Contact Us</a>
-                </li>
-
-                <li class="nav-item mr-3">
-                    <a class="nav-link" href="/notifications" title="Notifications">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bell" viewBox="0 0 16 16">
-                            <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6"/>
-                        </svg>
-                    </a>
-                </li>
-
-                <li class="nav-item">
-                    <a class="nav-link" href="#" id="profileDropdown">
-                        <img src="https://static.vecteezy.com/system/resources/thumbnails/009/292/244/small/default-avatar-icon-of-social-media-user-vector.jpg" class="rounded-circle mr-1 navbar-profile-pic" alt="Profile"> Profile
-                    </a>
-                </li>
-            </ul>
+        <div class="ml-auto d-flex align-items-center text-white">
+            <span class="mr-3">{{ current_user["full_name"] }}</span>
+            <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
         </div>
     </div>
 </nav>
 
-<div class="container mt-5">
+<div class="container my-5">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
-    <div class="jumbotron bg-white shadow-sm border text-center py-5 mb-5">
-        <h1 class="text-navy font-weight-bold">Seller Dashboard</h1>
-        <p class="lead text-muted mt-3">Post items, keep track of listings, ask for new categories, and check how auctions ended.</p>
-        <hr>
-        <p class="mb-4">This page shows the main seller tools in one place.</p>
-        <a class="btn btn-navy btn-lg px-4 mr-2" href="#" role="button">Create New Listing</a>
+    {% if listing_error %}
+    <div class="alert alert-danger">{{ listing_error }}</div>
+    {% endif %}
+    {% if listing_success %}
+    <div class="alert alert-success">{{ listing_success }}</div>
+    {% endif %}
+
+    <div class="hero-panel p-5 mb-4">
+        <div class="row align-items-center">
+            <div class="col-lg-7">
+                <span class="badge badge-warning text-dark px-3 py-2 mb-3">Seller Workspace</span>
+                <h1 class="display-4 font-weight-bold">Seller Dashboard</h1>
+                <p class="lead mb-4">Create listings, monitor auction progress, and send support or category requests to helpdesk from one place.</p>
+                <a href="#list-product" class="quick-link">Create New Listing</a>
+                <a href="#support-center" class="quick-link">Contact Helpdesk</a>
+                <a href="#auction-results" class="quick-link">View Results</a>
+            </div>
+            <div class="col-lg-5 mt-4 mt-lg-0">
+                <div class="bg-white text-dark rounded p-4">
+                    <div class="small text-muted text-uppercase font-weight-bold">Snapshot</div>
+                    <h4 class="font-weight-bold mt-2">Your active seller tools</h4>
+                    <p class="text-muted">Everything on this page is live: listing creation, category requests, support tickets, auction status review, and logout.</p>
+                    <span class="pill">{{ my_listings|length }} listings loaded</span>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="seller-block p-4 mb-5">
-        <h3 class="text-navy font-weight-bold mb-3">List a Product</h3>
-        <p class="text-muted">Enter the item details, choose a category, set a hidden reserve price, and specify max bids.</p>
-
-        {% if listing_error %}
-        <div class="alert alert-danger">{{ listing_error }}</div>
-        {% endif %}
-        {% if listing_success %}
-        <div class="alert alert-success">{{ listing_success }}</div>
-        {% endif %}
-
-        <form action="/list_product" method="POST">
-            <div class="form-row">
-                <div class="form-group col-md-6">
-                    <label>Auction Title</label>
-                    <input type="text" name="auction_title" class="form-control" placeholder="e.g. Samsung Galaxy" required>
+    <div class="row">
+        <div class="col-lg-7 mb-4">
+            <div class="surface-card p-4 h-100" id="list-product">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="text-navy font-weight-bold mb-0">List a Product</h3>
+                    <span class="pill">Auction creation</span>
                 </div>
-                <div class="form-group col-md-6">
-                    <label>Product Name</label>
-                    <input type="text" name="product_name" class="form-control" placeholder="e.g. S22" required>
-                </div>
+                <p class="text-muted">Enter item details, choose a category, set a reserve price, and cap the number of bids.</p>
+
+                <form action="/list_product" method="POST">
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Auction Title</label>
+                            <input type="text" name="auction_title" class="form-control" placeholder="e.g. Samsung Galaxy" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>Product Name</label>
+                            <input type="text" name="product_name" class="form-control" placeholder="e.g. S22" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Product Description</label>
+                        <textarea name="product_description" class="form-control" rows="3" placeholder="Example: Used TI-84 calculator in good condition" required></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col-md-3">
+                            <label>Category</label>
+                            <select name="category" class="form-control" required>
+                                <option value="" selected disabled>Select category</option>
+                                {% for cat in categories %}
+                                <option value="{{ cat }}">{{ cat }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label>Hidden Reserve Price ($)</label>
+                            <input type="number" name="reserve_price" step="0.01" min="0" class="form-control" placeholder="e.g. 50.00" required>
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label>Quantity</label>
+                            <input type="number" name="quantity" min="1" value="1" class="form-control" required>
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label>Max Number of Bids</label>
+                            <input type="number" name="max_bids" min="1" class="form-control" placeholder="e.g. 10" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-navy">Create Listing</button>
+                </form>
             </div>
+        </div>
 
-            <div class="form-group">
-                <label>Product Description</label>
-                <textarea name="product_description" class="form-control" rows="3" placeholder="Example: Used TI-84 calculator in good condition" required></textarea>
+        <div class="col-lg-5 mb-4" id="support-center">
+            <div class="surface-card p-4 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="text-navy font-weight-bold mb-0">Seller Helpdesk Request</h3>
+                    <span class="pill">Live ticket intake</span>
+                </div>
+                <p class="text-muted">This sends a ticket directly to the helpdesk queue for staff review.</p>
+                <form action="/submit_ticket" method="POST">
+                    <div class="form-group">
+                        <label>Request type</label>
+                        <select class="form-control" name="request_type">
+                            <option>Listing Support</option>
+                            <option>Category Request</option>
+                            <option>Payment Question</option>
+                            <option>Account Access</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Subject</label>
+                        <input type="text" class="form-control" name="request_subject" placeholder="Need a category for art supplies" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Priority</label>
+                        <select class="form-control" name="priority">
+                            <option>Low</option>
+                            <option selected>Medium</option>
+                            <option>High</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea class="form-control" rows="4" name="request_desc" placeholder="Explain what you need help with." required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-navy">Send to Helpdesk</button>
+                </form>
             </div>
-
-            <div class="form-row">
-                <div class="form-group col-md-3">
-                    <label>Category</label>
-                    <select name="category" class="form-control" required>
-                        <option value="" selected disabled>Select category</option>
-                        {% for cat in categories %}
-                        <option value="{{ cat }}">{{ cat }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="form-group col-md-3">
-                    <label>Hidden Reserve Price ($)</label>
-                    <input type="number" name="reserve_price" step="0.01" min="0" class="form-control" placeholder="e.g. 50.00" required>
-                </div>
-
-                <div class="form-group col-md-3">
-                    <label>Quantity</label>
-                    <input type="number" name="quantity" min="1" value="1" class="form-control" required>
-                </div>
-
-                <div class="form-group col-md-3">
-                    <label>Max Number of Bids</label>
-                    <input type="number" name="max_bids" min="1" class="form-control" placeholder="e.g. 10" required>
-                </div>
-            </div>
-
-            <button type="submit" class="btn btn-navy">Create Listing</button>
-        </form>
+        </div>
     </div>
 
-    <div class="seller-block p-4 mb-5">
-        <h3 class="text-navy font-weight-bold mb-3">Manage My Listings</h3>
-        <p class="text-muted">All listings you've posted, with current auction state.</p>
+    <div class="surface-card p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3 class="text-navy font-weight-bold mb-0">Manage My Listings</h3>
+            <span class="pill">Current auction state</span>
+        </div>
+        <p class="text-muted">All listings you've posted, with current status and highest bid information.</p>
 
         {% if my_listings %}
-        <table class="table table-bordered table-hover bg-white">
-            <thead class="thead-light">
-                <tr>
-                    <th>Listing ID</th>
-                    <th>Product</th>
-                    <th>Category</th>
-                    <th>Reserve Price</th>
-                    <th>Current Highest Bid</th>
-                    <th>Bids Progress</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in my_listings %}
-                <tr>
-                    <td>#{{ item.listing_id }}</td>
-                    <td>
-                        <strong>{{ item.product_name }}</strong><br>
-                        <small class="text-muted">{{ item.auction_title }}</small>
-                    </td>
-                    <td>{{ item.category }}</td>
-                    <td>{{ item.reserve_price }}</td>
-                    <td>
-                        {% if item.current_bid %}
-                            ${{ "%.2f"|format(item.current_bid) }}
-                        {% else %}
-                            <span class="text-muted">No bids yet</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ item.bid_count }} / {{ item.max_bids }}</td>
-                    <td>
-                        {% if item.status == 1 %}
-                            <span class="badge badge-success">Active</span>
-                        {% elif item.status == 2 %}
-                            <span class="badge badge-secondary">Sold</span>
-                        {% else %}
-                            <span class="badge badge-dark">Inactive</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover bg-white mb-0">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Listing ID</th>
+                        <th>Product</th>
+                        <th>Category</th>
+                        <th>Reserve Price</th>
+                        <th>Current Highest Bid</th>
+                        <th>Bids Progress</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in my_listings %}
+                    <tr>
+                        <td>#{{ item.listing_id }}</td>
+                        <td>
+                            <strong>{{ item.product_name }}</strong><br>
+                            <small class="text-muted">{{ item.auction_title }}</small>
+                        </td>
+                        <td>{{ item.category }}</td>
+                        <td>{{ item.reserve_price }}</td>
+                        <td>
+                            {% if item.current_bid %}
+                                ${{ "%.2f"|format(item.current_bid) }}
+                            {% else %}
+                                <span class="text-muted">No bids yet</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.bid_count }} / {{ item.max_bids }}</td>
+                        <td>
+                            {% if item.status == 1 %}
+                                <span class="badge badge-success">Active</span>
+                            {% elif item.status == 2 %}
+                                <span class="badge badge-secondary">Sold</span>
+                            {% else %}
+                                <span class="badge badge-dark">Inactive</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         {% else %}
-        <p class="text-muted font-italic">You haven't listed any products yet. Use the form above to create your first listing!</p>
+        <p class="text-muted font-italic mb-0">You haven't listed any products yet. Use the form above to create your first listing.</p>
         {% endif %}
     </div>
 
-    <div class="seller-block p-4 mb-5">
-        <h3 class="text-navy font-weight-bold mb-3">Request a New Category</h3>
-        <p class="text-muted">If your item does not fit the current options, you can send in a category request.</p>
-
-        <form>
-            <div class="form-group">
-                <label>Requested Category Name</label>
-                <input type="text" class="form-control" placeholder="Enter requested category name">
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <div class="surface-card p-4 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="text-navy font-weight-bold mb-0">Request a New Category</h3>
+                    <span class="pill">Routes to helpdesk</span>
+                </div>
+                <p class="text-muted">If your item does not fit the current options, send a category request to helpdesk. This button now submits a real ticket.</p>
+                <form action="/submit_ticket" method="POST">
+                    <input type="hidden" name="request_type" value="Category Request">
+                    <div class="form-group">
+                        <label>Requested Category Name</label>
+                        <input type="text" class="form-control" name="request_subject" placeholder="Enter requested category name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Priority</label>
+                        <select class="form-control" name="priority">
+                            <option>Low</option>
+                            <option selected>Medium</option>
+                            <option>High</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Reason</label>
+                        <textarea class="form-control" rows="3" name="request_desc" placeholder="Explain why this category should be added" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-navy">Submit Category Request</button>
+                </form>
             </div>
+        </div>
 
-            <div class="form-group">
-                <label>Reason</label>
-                <textarea class="form-control" rows="3" placeholder="Explain why this category should be added"></textarea>
+        <div class="col-lg-6 mb-4" id="auction-results">
+            <div class="surface-card p-4 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="text-navy font-weight-bold mb-0">Auction Results</h3>
+                    <span class="pill">Reference view</span>
+                </div>
+                <p class="text-muted">This section reflects the project layout: reserve-met auctions can proceed automatically, while below-reserve examples show seller review actions.</p>
+                <table class="table table-bordered table-hover bg-white mb-0">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Product</th>
+                            <th>Winning Bid</th>
+                            <th>Reserve Status</th>
+                            <th>Outcome / Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Monitor</td>
+                            <td>$180.00</td>
+                            <td><span class="text-success font-weight-bold">Reserve Met</span></td>
+                            <td><span class="text-success">Payment Automatically Processed</span></td>
+                        </tr>
+                        <tr>
+                            <td>Jacket</td>
+                            <td>$25.00</td>
+                            <td><span class="text-warning font-weight-bold">Below Reserve</span></td>
+                            <td>
+                                <button class="btn btn-success btn-sm" type="button" disabled>Accept</button>
+                                <button class="btn btn-danger btn-sm" type="button" disabled>Reject</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
-
-            <button type="button" class="btn btn-navy">Submit Category Request</button>
-        </form>
+        </div>
     </div>
-
-    <div class="seller-block p-4 mb-5">
-        <h3 class="text-navy font-weight-bold mb-3">Auction Results</h3>
-        <p class="text-muted">
-            If the reserve price is met, payment can go through automatically. If the highest bid is still below reserve, the seller can decide whether to accept or reject it.
-        </p>
-
-        <table class="table table-bordered table-hover bg-white">
-            <thead class="thead-light">
-                <tr>
-                    <th>Product</th>
-                    <th>Winning Bid</th>
-                    <th>Reserve Status</th>
-                    <th>Outcome / Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Monitor</td>
-                    <td>$180.00</td>
-                    <td><span class="text-success font-weight-bold">Reserve Met</span></td>
-                    <td><span class="text-success">Payment Automatically Processed</span></td>
-                </tr>
-                <tr>
-                    <td>Jacket</td>
-                    <td>$25.00</td>
-                    <td><span class="text-warning font-weight-bold">Below Reserve</span></td>
-                    <td>
-                        <button class="btn btn-success btn-sm">Accept</button>
-                        <button class="btn btn-danger btn-sm">Reject</button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
 </div>
 
 <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"
