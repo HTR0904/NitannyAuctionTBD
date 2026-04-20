@@ -21,22 +21,25 @@
         .portal-card { border: 0; border-radius: 18px; box-shadow: 0 15px 35px rgba(4, 30, 66, 0.08); }
         .portal-label { color: var(--slate); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; }
         .example-pill { display: inline-block; margin-top: 0.25rem; margin-right: 0.35rem; padding: 0.25rem 0.55rem; border-radius: 999px; background: #eef3fb; color: var(--navy); }
+
+        /* Added custom class to control maximum expansion while remaining fluid */
+        .wide-container { max-width: 1400px; margin: 0 auto; }
     </style>
 </head>
 <body>
-<div class="container py-5">
+
+<div class="container-fluid wide-container py-5 px-4 px-md-5">
     <div class="hero-shell bg-white">
         <div class="row no-gutters">
-            <div class="col-lg-4 hero-side p-5 d-flex flex-column justify-content-center">
+            <div class="col-xl-3 col-lg-4 hero-side p-5 d-flex flex-column justify-content-center">
                 <div class="mb-4">
                     <span class="badge badge-light px-3 py-2">Penn State Marketplace</span>
                 </div>
                 <h1 class="display-4 font-weight-bold mb-3">Nittany Auction</h1>
                 <p class="lead mb-4">Auction management for bidders, sellers, and helpdesk staff in one shared platform.</p>
-                <p class="mb-0">Demo accounts are preloaded with password <strong>password123</strong>.</p>
             </div>
 
-            <div class="col-lg-8 p-4 p-md-5">
+            <div class="col-xl-9 col-lg-8 p-4 p-xl-5">
                 {% if error %}
                 <div class="alert alert-danger alert-dismissible fade show" role="alert">
                     <strong>Error:</strong> {{ error }}
@@ -77,7 +80,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="col-md-4 mb-4">
+                    <div class="col-lg-4 col-md-12 mb-4">
                         <div class="card portal-card h-100">
                             <div class="card-body">
                                 <div class="portal-label mb-2">Bidder</div>
@@ -96,7 +99,7 @@
                         </div>
                     </div>
 
-                    <div class="col-md-4 mb-4">
+                    <div class="col-lg-4 col-md-12 mb-4">
                         <div class="card portal-card h-100">
                             <div class="card-body">
                                 <div class="portal-label mb-2">Seller</div>
@@ -115,7 +118,7 @@
                         </div>
                     </div>
 
-                    <div class="col-md-4 mb-4">
+                    <div class="col-lg-4 col-md-12 mb-4">
                         <div class="card portal-card h-100">
                             <div class="card-body">
                                 <div class="portal-label mb-2">Staff</div>

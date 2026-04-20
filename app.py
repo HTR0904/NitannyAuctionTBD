@@ -562,7 +562,7 @@ def bidder():
     if not bidder_only():
         return redirect('/')
     # TODO: auction logic
-    return None
+    return render_template("bidders_home.html", current_user=get_app_user(session['user_email']))
 
 
 @app.route('/bidder/search')
