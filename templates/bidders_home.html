@@ -3,30 +3,21 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
           integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
-
-    <title>Home</title>
-
+    <title>Bidder Dashboard</title>
     <style>
-        .bg-navy { background-color: #041E42; }
-        .text-navy { color: #041E42; }
-        .btn-navy { background-color: #041E42; color: white; border: none; }
-
-        /* Explicitly size the profile picture in the navbar */
-        .navbar-profile-pic {
-            width: 32px;
-            height: 32px;
-            object-fit: cover;
-        }
+        .bg-navy { background-color: #041e42; }
+        .text-navy { color: #041e42; }
+        .btn-navy { background-color: #041e42; color: white; border: none; }
+        .btn-navy:hover { color: white; background-color: #062b5d; }
+        .surface-card { background: white; border-radius: 18px; box-shadow: 0 16px 40px rgba(4, 30, 66, 0.08); border: 0; }
     </style>
 </head>
 <body class="bg-light">
-
-<!-- Nav bar on top -->
 <nav class="navbar navbar-expand-lg navbar-dark bg-navy">
     <div class="container">
+
         <a class="navbar-brand font-weight-bold" href="/home">Nittany Auction</a>
 
         <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
@@ -59,84 +50,83 @@
 
                 <li class="nav-item">
                     <a class="nav-link" href="/settings" id="profileDropdown">
-                        <!-- Default profile image -->
                         <img src="https://static.vecteezy.com/system/resources/thumbnails/009/292/244/small/default-avatar-icon-of-social-media-user-vector.jpg" class="rounded-circle mr-1 navbar-profile-pic" alt="Profile"> Profile
                     </a>
                 </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="/logout">Logout</a>
+                </li>
             </ul>
+
         </div>
     </div>
 </nav>
 
-<!--Remainder of homepage-->
 <div class="container mt-5">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
-    <!--Hero element-->
     <div class="jumbotron bg-white shadow-sm border text-center py-5 mb-5">
-        <h1 class=" text-navy font-weight-bold">Welcome to the Marketplace</h1>
-        <p class="lead text-muted mt-3">Buy, sell, and bid on items within the university and local community.</p>
-        <hr>
-        <p>Get started now</p>
-        <a class="btn btn-navy btn-lg px-4 mr-2" href="/search" role="button">Browse Categories</a>
+        <h1 class="text-navy font-weight-bold">Bidder Dashboard</h1>
+        <p class="lead text-muted mt-3">Track trending listings and contact helpdesk whenever your account or bids need attention.</p>
     </div>
 
-    <!-- Auction recommendation -->
-    <h3 class="text-navy font-weight-bold mb-4">Trending Auctions</h3>
     <div class="row">
-
-        <div class="col">
-            <div class="card h-100">
-                <div class="card-body text-center d-flex flex-column">
-                    <h5 class="card-title font-weight-bold">Item 1</h5>
-                    <h4 class="text-navy my-3">Bid Amount</h4>
-                    <p>Item Description</p>
-                    <a class="btn btn-outline-primary btn-block">View Auction</a>
-                </div>
-                <div class="card-footer text-center">
-                    Auction end time
-                </div>
-            </div>
-        </div>
-
-         <div class="col">
-            <div class="card h-100">
-                <div class="card-body text-center d-flex flex-column">
-                    <h5 class="card-title font-weight-bold">Item 2</h5>
-                    <h4 class="text-navy my-3">Bid Amount</h4>
-                    <p>Item Description</p>
-                    <a class="btn btn-outline-primary btn-block">View Auction</a>
-                </div>
-                <div class="card-footer text-center">
-                    Auction end time
+        <div class="col-lg-7 mb-4">
+            <div class="card surface-card h-100">
+                <div class="card-body">
+                    <h3 class="text-navy font-weight-bold mb-3">Trending Auctions</h3>
+                    <div class="row">
+                        <div class="col-md-6 mb-3"><div class="border rounded p-3 h-100"><h5 class="font-weight-bold">PlayStation 5 Bundle</h5><p class="text-muted mb-2">Current bid: $285</p><small class="text-muted">Closes 04/17/2026 08:00 PM</small></div></div>
+                        <div class="col-md-6 mb-3"><div class="border rounded p-3 h-100"><h5 class="font-weight-bold">Calculus Textbook Set</h5><p class="text-muted mb-2">Current bid: $48</p><small class="text-muted">Closes 04/18/2026 05:30 PM</small></div></div>
+                        <div class="col-md-6 mb-3"><div class="border rounded p-3 h-100"><h5 class="font-weight-bold">Mini Fridge</h5><p class="text-muted mb-2">Current bid: $92</p><small class="text-muted">Closes 04/19/2026 09:15 PM</small></div></div>
+                        <div class="col-md-6 mb-3"><div class="border rounded p-3 h-100"><h5 class="font-weight-bold">Desk Chair</h5><p class="text-muted mb-2">Current bid: $35</p><small class="text-muted">Closes 04/16/2026 07:00 PM</small></div></div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="col">
-            <div class="card h-100">
-                <div class="card-body text-center d-flex flex-column">
-                    <h5 class="card-title font-weight-bold">Item 3</h5>
-                    <h4 class="text-navy my-3">Bid Amount</h4>
-                    <p>Item Description</p>
-                    <a class="btn btn-outline-primary btn-block">View Auction</a>
-                </div>
-                <div class="card-footer text-center">
-                    Auction end time
+        <div class="col-lg-5 mb-4">
+            <div class="card surface-card h-100">
+                <div class="card-body">
+                    <h3 class="text-navy font-weight-bold mb-3">Contact Helpdesk</h3>
+                    <form action="/submit_ticket" method="POST">
+                        <div class="form-group">
+                            <label>Request type</label>
+                            <select class="form-control" name="request_type">
+                                <option>Helpdesk</option>
+                                <option>Account Access</option>
+                                <option>Bidding Issue</option>
+                                <option>Payment Question</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Subject</label>
+                            <input type="text" class="form-control" name="request_subject" placeholder="Unable to place a bid" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Priority</label>
+                            <select class="form-control" name="priority">
+                                <option>Low</option>
+                                <option selected>Medium</option>
+                                <option>High</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <textarea class="form-control" rows="4" name="request_desc" placeholder="Share the problem details here." required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-navy">Submit Ticket</button>
+                    </form>
                 </div>
             </div>
         </div>
-
     </div>
 </div>
-
-<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"
-        integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n"
-        crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
-        integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo"
-        crossorigin="anonymous"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"
-        integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6"
-        crossorigin="anonymous"></script>
 </body>
 </html>

@@ -3,193 +3,299 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
           integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
-
-    <title>HelpDesk Home</title>
-
+    <title>Helpdesk Dashboard</title>
     <style>
-        .bg-navy { background-color: #041E42; }
-        .text-navy { color: #041E42; }
-        .btn-navy { background-color: #041E42; color: white; border: none; }
-
-        .navbar-profile-pic {
-            width: 32px;
-            height: 32px;
-            object-fit: cover;
+        :root { --navy: #041e42; --navy-soft: #153d72; --cloud: #eef3fb; }
+        body { background: linear-gradient(180deg, #f4f7fb, #ffffff); }
+        .bg-navy { background-color: var(--navy); }
+        .btn-navy { background-color: var(--navy); color: white; border: none; }
+        .btn-navy:hover { color: white; background-color: var(--navy-soft); }
+        .metric-card, .work-card { background: white; border: 0; border-radius: 20px; box-shadow: 0 18px 42px rgba(4, 30, 66, 0.08); }
+        .hero-panel {
+            background:
+                radial-gradient(circle at top right, rgba(242, 197, 92, 0.3), transparent 26%),
+                linear-gradient(135deg, rgba(4, 30, 66, 0.98), rgba(21, 61, 114, 0.95));
+            color: white; border-radius: 28px; overflow: hidden;
         }
-
-        .helpdesk-block {
-            background-color: white;
-            border: 1px solid #dee2e6;
-            border-radius: 0.25rem;
-            box-shadow: 0 .125rem .25rem rgba(0,0,0,.075);
-        }
-
-        .table th, .table td {
-            vertical-align: middle;
-        }
+        .table-wrap { max-height: 420px; overflow: auto; }
+        .pill { display: inline-block; border-radius: 999px; padding: 0.25rem 0.75rem; background: var(--cloud); color: var(--navy); font-size: 0.85rem; font-weight: 600; }
+        .subpanel { background: #f8fbff; border: 1px solid #d7e2f2; border-radius: 16px; }
     </style>
 </head>
-<body class="bg-light">
-
+<body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-navy">
     <div class="container">
         <a class="navbar-brand font-weight-bold" href="/helpdesk">Nittany Auction</a>
-
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent" aria-controls="#navbarContent" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-
-        <div class="collapse navbar-collapse" id="navbarContent">
-
-            <form class="form-inline mx-auto my-2 my-lg-0">
-                <input class="form-control mr-sm-2" type="search" name="query" placeholder="Search" aria-label="Search" style="width: 350px">
-                <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Search</button>
-            </form>
-
-            <ul class="navbar-nav align-items-center">
-                <li class="nav-item">
-                    <a class="nav-link" href="#">Admin Tools</a>
-                </li>
-
-                <li class="nav-item mr-3">
-                    <a class="nav-link" href="/notifications" title="Notifications">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bell" viewBox="0 0 16 16">
-                            <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6"/>
-                        </svg>
-                    </a>
-                </li>
-
-                <li class="nav-item">
-                    <a class="nav-link" href="#" id="profileDropdown">
-                        <img src="https://static.vecteezy.com/system/resources/thumbnails/009/292/244/small/default-avatar-icon-of-social-media-user-vector.jpg" class="rounded-circle mr-1 navbar-profile-pic" alt="Profile"> Profile
-                    </a>
-                </li>
-            </ul>
+        <div class="ml-auto d-flex align-items-center text-white">
+            <span class="mr-3">{{ current_user["full_name"] }}</span>
+            <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
         </div>
     </div>
 </nav>
 
-<div class="container mt-5">
+<div class="container my-5">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
-    <div class="jumbotron bg-white shadow-sm border text-center py-5 mb-5">
-        <h1 class="text-navy font-weight-bold">HelpDesk Dashboard</h1>
-        <p class="lead text-muted mt-3">Review account changes, update roles, add categories, and look over basic market data.</p>
-        <hr>
-        <p class="mb-4">This page brings the main HelpDesk tools together in one spot.</p>
-        <a class="btn btn-navy btn-lg px-4 mr-2" href="#" role="button">Open Admin Tools</a>
-    </div>
-
-    <div class="helpdesk-block p-4 mb-5">
-        <h3 class="text-navy font-weight-bold mb-3">Change a User ID</h3>
-        <p class="text-muted">Use this section when a user needs their ID information updated.</p>
-
-        <form>
-            <div class="form-row">
-                <div class="form-group col-md-6">
-                    <label>Current User ID</label>
-                    <input type="text" class="form-control" placeholder="Enter current user ID">
-                </div>
-                <div class="form-group col-md-6">
-                    <label>New User ID</label>
-                    <input type="text" class="form-control" placeholder="Enter new user ID">
-                </div>
+    <div class="hero-panel p-5 mb-4">
+        <div class="row align-items-center">
+            <div class="col-lg-7">
+                <span class="badge badge-warning text-dark px-3 py-2 mb-3">Admin Control Center</span>
+                <h1 class="display-4 font-weight-bold">Helpdesk Workspace</h1>
+                <p class="lead mb-0">Receive tickets, manage user accounts, control category setup, and export a pseudo database view for reporting.</p>
             </div>
-            <button type="button" class="btn btn-navy">Update User ID</button>
-        </form>
-    </div>
-
-    <div class="helpdesk-block p-4 mb-5">
-        <h3 class="text-navy font-weight-bold mb-3">Change Account Type</h3>
-        <p class="text-muted">HelpDesk staff can update a user's role if their account needs to be changed.</p>
-
-        <form>
-            <div class="form-row">
-                <div class="form-group col-md-6">
-                    <label>User ID</label>
-                    <input type="text" class="form-control" placeholder="Enter user ID">
-                </div>
-                <div class="form-group col-md-6">
-                    <label>New Account Type</label>
-                    <select class="form-control">
-                        <option selected>Select account type</option>
-                        <option>Bidder</option>
-                        <option>Seller</option>
-                        <option>HelpDesk</option>
-                    </select>
+            <div class="col-lg-5 mt-4 mt-lg-0">
+                <div class="bg-white text-dark rounded p-4">
+                    <div class="small text-muted text-uppercase font-weight-bold">Export center</div>
+                    <h4 class="font-weight-bold mt-2">Database-style reporting</h4>
+                    <p class="text-muted">Download the current joined helpdesk dataset as CSV or XLSX for presentation and analysis.</p>
+                    <a href="/helpdesk/export/csv" class="btn btn-outline-dark mr-2">Export CSV</a>
+                    <a href="/helpdesk/export/xlsx" class="btn btn-navy">Export XLSX</a>
                 </div>
             </div>
-            <button type="button" class="btn btn-navy">Change Account Type</button>
-        </form>
+        </div>
     </div>
 
-    <div class="helpdesk-block p-4 mb-5">
-        <h3 class="text-navy font-weight-bold mb-3">Add a Product Category</h3>
-        <p class="text-muted">If the current category list is missing something, a new one can be added here.</p>
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3"><div class="metric-card p-4"><div class="text-muted small text-uppercase">Users</div><div class="display-4 font-weight-bold">{{ metrics["total_users"] }}</div></div></div>
+        <div class="col-md-3 mb-3"><div class="metric-card p-4"><div class="text-muted small text-uppercase">Open Tickets</div><div class="display-4 font-weight-bold">{{ metrics["open_tickets"] }}</div></div></div>
+        <div class="col-md-3 mb-3"><div class="metric-card p-4"><div class="text-muted small text-uppercase">Categories</div><div class="display-4 font-weight-bold">{{ metrics["categories"] }}</div></div></div>
+        <div class="col-md-3 mb-3"><div class="metric-card p-4"><div class="text-muted small text-uppercase">Staff Members</div><div class="display-4 font-weight-bold">{{ metrics["staff_members"] }}</div></div></div>
+    </div>
 
-        <form>
-            <div class="form-group">
-                <label>Category Name</label>
-                <input type="text" class="form-control" placeholder="Enter new category name">
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <div class="work-card p-4 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="font-weight-bold mb-0">User Management</h3><span class="pill">Account creation enabled</span></div>
+                <div class="subpanel p-3 mb-4">
+                    <h5 class="font-weight-bold">Create Account</h5>
+                    <form action="/helpdesk/create_account" method="POST">
+                        <div class="form-row">
+                            <div class="form-group col-md-4">
+                                <label>Full name</label>
+                                <input type="text" class="form-control" name="full_name" placeholder="New user name" required>
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label>Email</label>
+                                <input type="email" class="form-control" name="email" placeholder="newuser@psu.edu" required>
+                            </div>
+                            <div class="form-group col-md-2">
+                                <label>Role</label>
+                                <select class="form-control" name="role">
+                                    <option value="bidder">Bidder</option>
+                                    <option value="seller">Seller</option>
+                                    <option value="helpdesk">Helpdesk</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-2">
+                                <label>Password</label>
+                                <input type="password" class="form-control" name="password" value="password123" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-navy">Create Account</button>
+                    </form>
+                </div>
+
+                <form action="/helpdesk/update_user" method="POST" class="mb-4">
+                    <div class="form-group">
+                        <label>User email</label>
+                        <input type="email" class="form-control" name="user_email" placeholder="seller@nittanyauction.com" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-5">
+                            <label>Full name</label>
+                            <input type="text" class="form-control" name="full_name" placeholder="Optional update">
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label>Role</label>
+                            <select class="form-control" name="role">
+                                <option value="">Keep current</option>
+                                <option value="bidder">Bidder</option>
+                                <option value="seller">Seller</option>
+                                <option value="helpdesk">Helpdesk</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label>Status</label>
+                            <select class="form-control" name="user_status">
+                                <option value="">Keep current</option>
+                                <option>Active</option>
+                                <option>Suspended</option>
+                                <option>Pending</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-navy">Update User</button>
+                </form>
+
+                <div class="table-wrap">
+                    <table class="table table-hover">
+                        <thead class="thead-light"><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
+                        <tbody>
+                        {% for user in users %}
+                            <tr><td>{{ user["full_name"] }}</td><td>{{ user["email"] }}</td><td class="text-capitalize">{{ user["role"] }}</td><td>{{ user["user_status"] }}</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
+        </div>
 
-            <div class="form-group">
-                <label>Description</label>
-                <textarea class="form-control" rows="3" placeholder="Write a short description for the new category"></textarea>
-            </div>
+        <div class="col-lg-6 mb-4">
+            <div class="work-card p-4 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="font-weight-bold mb-0">Category Management</h3><span class="pill">Direct admin add</span></div>
 
-            <button type="button" class="btn btn-navy">Add Category</button>
-        </form>
+                <form action="/helpdesk/create_category" method="POST" class="mb-4" id="categoryForm">
+                    <div class="form-group">
+                        <label>Parent Category</label>
+                        <select class="form-control" name="existing_parent" id="parentSelect" required>
+                            <option value="" selected disabled>Select Parent Category...</option>
+                            <option value="NEW_PARENT" class="font-weight-bold text-success">++ Create New Parent ++</option>
+                            {% for parent in distinct_parents %}
+                                <option value="{{ parent['parent_category'] }}">{{ parent['parent_category'] }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="newParentDiv" style="display: none;">
+                        <label>New Parent Name</label>
+                        <input type="text" class="form-control" name="new_parent" id="newParentInput" placeholder="e.g. Vehicles">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Subcategory Name</label>
+                        <input type="text" class="form-control" name="child_category" placeholder="e.g. Bicycles" required>
+                    </div>
+                    <button type="submit" class="btn btn-navy">Add Category</button>
+                </form>
+
+                    <div class="category-tree mt-4">
+                        <h5 class="font-weight-bold mb-3">Current Hierarchy</h5>
+
+                        <div class="table-wrap pr-2">
+                            <div class="accordion" id="categoryAccordion">
+                                {% for parent, children in categories.items() %}
+                                <div class="card border-0 mb-2 shadow-sm" style="border-radius: 12px; overflow: hidden;">
+                                    <div class="card-header bg-white border-0 py-3" id="heading-{{ loop.index }}" style="cursor: pointer;" data-toggle="collapse" data-target="#collapse-{{ loop.index }}" aria-expanded="false" aria-controls="collapse-{{ loop.index }}">
+                                        <h6 class="mb-0 text-navy font-weight-bold d-flex justify-content-between align-items-center">
+                                            <span>📁 {{ parent }}</span>
+                                            <span class="badge badge-light border text-muted">{{ children|length }} subcategories</span>
+                                        </h6>
+                                    </div>
+
+                                    <div id="collapse-{{ loop.index }}" class="collapse" aria-labelledby="heading-{{ loop.index }}" data-parent="#categoryAccordion">
+                                        <div class="card-body bg-light py-2 px-4 border-top">
+                                            <ul class="list-unstyled mb-0">
+                                                {% for child in children %}
+                                                <li class="py-2 text-muted border-bottom last-border-none">↳ {{ child }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <p class="text-muted font-italic">No categories found in the database.</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div> </div> <div class="work-card p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="font-weight-bold mb-0">Incoming Helpdesk Tickets</h3><span class="pill">User requests intake</span></div>
+        <div class="table-wrap">
+            <table class="table table-hover">
+                <thead class="thead-light"><tr><th>ID</th><th>Sender</th><th>Subject</th><th>Category</th><th>Status</th><th>Priority</th><th>Assignment</th></tr></thead>
+                <tbody>
+                {% for ticket in tickets %}
+                    <tr>
+                        <td>#{{ ticket["id"] }}</td>
+                        <td>{{ ticket["sender_email"] }}</td>
+                        <td><strong>{{ ticket["subject"] }}</strong><br><small class="text-muted">{{ ticket["description"] }}</small></td>
+                        <td>{{ ticket["category_name"] }}</td>
+                        <td>{{ ticket["status"] }}</td>
+                        <td>{{ ticket["priority"] }}</td>
+                        <td>
+                            <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" class="form-inline">
+                                <input type="email" class="form-control form-control-sm mr-2 mb-2" name="assigned_email" value="{{ ticket['assigned_email'] }}" placeholder="Staff email">
+                                <select class="form-control form-control-sm mr-2 mb-2" name="status">
+                                    <option {% if ticket["status"] == "Open" %}selected{% endif %}>Open</option>
+                                    <option {% if ticket["status"] == "In Progress" %}selected{% endif %}>In Progress</option>
+                                    <option {% if ticket["status"] == "Closed" %}selected{% endif %}>Closed</option>
+                                </select>
+                                <select class="form-control form-control-sm mr-2 mb-2" name="priority">
+                                    <option {% if ticket["priority"] == "Low" %}selected{% endif %}>Low</option>
+                                    <option {% if ticket["priority"] == "Medium" %}selected{% endif %}>Medium</option>
+                                    <option {% if ticket["priority"] == "High" %}selected{% endif %}>High</option>
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-navy mb-2">Save</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="7" class="text-center text-muted py-4">No tickets yet. New user requests will appear here.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 
-    <div class="helpdesk-block p-4 mb-5">
-        <h3 class="text-navy font-weight-bold mb-3">Market Analysis</h3>
-        <p class="text-muted">This sample table gives a quick summary of listings and auction results by category.</p>
-
-        <table class="table table-bordered table-hover bg-white">
-            <thead class="thead-light">
-                <tr>
-                    <th>Category</th>
-                    <th>Total Listings</th>
-                    <th>Completed Auctions</th>
-                    <th>Average Final Price</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Books</td>
-                    <td>12</td>
-                    <td>9</td>
-                    <td>$38.50</td>
-                </tr>
-                <tr>
-                    <td>Electronics</td>
-                    <td>7</td>
-                    <td>5</td>
-                    <td>$122.00</td>
-                </tr>
-                <tr>
-                    <td>Furniture</td>
-                    <td>5</td>
-                    <td>4</td>
-                    <td>$76.25</td>
-                </tr>
-            </tbody>
-        </table>
+    <div class="work-card p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="font-weight-bold mb-0">Pseudo Database View</h3><span class="pill">Joined records for export</span></div>
+        <div class="table-wrap">
+            <table class="table table-bordered table-sm">
+                <thead class="thead-light"><tr><th>Ticket ID</th><th>Sender</th><th>Role</th><th>Category</th><th>Status</th><th>Priority</th><th>Assigned Staff</th><th>Updated</th></tr></thead>
+                <tbody>
+                {% for ticket in tickets %}
+                    <tr>
+                        <td>{{ ticket["id"] }}</td>
+                        <td>{{ ticket["sender_email"] }}</td>
+                        <td>
+                            {% for user in users if user["email"] == ticket["sender_email"] %}
+                                {{ user["role"]|capitalize }}
+                            {% else %}
+                                Unknown
+                            {% endfor %}
+                        </td>
+                        <td>{{ ticket["category_name"] }}</td>
+                        <td>{{ ticket["status"] }}</td>
+                        <td>{{ ticket["priority"] }}</td>
+                        <td>{{ ticket["assigned_email"] }}</td>
+                        <td>{{ ticket["updated_at"] }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="8" class="text-center text-muted py-4">No records available for export yet.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
-
 </div>
 
-<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"
-        integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n"
-        crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
-        integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo"
-        crossorigin="anonymous"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"
-        integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6"
-        crossorigin="anonymous"></script>
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" crossorigin="anonymous"></script>
+
+<script>
+    document.getElementById('parentSelect').addEventListener('change', function() {
+        var newParentDiv = document.getElementById('newParentDiv');
+        var newParentInput = document.getElementById('newParentInput');
+
+        if (this.value === 'NEW_PARENT') {
+            newParentDiv.style.display = 'block';
+            newParentInput.setAttribute('required', 'required');
+        } else {
+            newParentDiv.style.display = 'none';
+            newParentInput.removeAttribute('required');
+            newParentInput.value = ''; // Clear it out so we don't accidentally send hidden data
+        }
+    });
+</script>
 </body>
 </html>
