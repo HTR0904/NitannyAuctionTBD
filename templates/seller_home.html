@@ -44,8 +44,8 @@
 
         <div class="collapse navbar-collapse" id="navbarContent">
 
-            <form class="form-inline mx-auto my-2 my-lg-0">
-                <input class="form-control mr-sm-2" type="search" name="query" placeholder="Search" aria-label="Search" style="width: 350px">
+            <form class="form-inline mx-auto my-2 my-lg-0" action="/search" method="GET">
+                <input class="form-control mr-sm-2" type="search" name="q" placeholder="Search" aria-label="Search" style="width: 350px">
                 <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Search</button>
             </form>
 
@@ -66,7 +66,7 @@
                 </li>
 
                 <li class="nav-item">
-                    <a class="nav-link" href="#" id="profileDropdown">
+                    <a class="nav-link" href="/settings" id="profileDropdown">
                         <img src="https://static.vecteezy.com/system/resources/thumbnails/009/292/244/small/default-avatar-icon-of-social-media-user-vector.jpg" class="rounded-circle mr-1 navbar-profile-pic" alt="Profile"> Profile
                     </a>
                 </li>

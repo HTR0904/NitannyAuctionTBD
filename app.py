@@ -5,6 +5,160 @@ import hashlib
 import uuid
 app = Flask(__name__)
 
+def init_db():
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Notifications (
+            notification_id Integer PRIMARY KEY AUTOINCREMENT,
+            user_email TEXT NOT NULL,
+            content TEXT NOT NULL,
+            link TEXT,
+            is_read INTEGER NOT NULL DEFAULT 0 CHECK (is_read IN (0, 1)),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_email) REFERENCES User_Login(email)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Chat_Threads(
+            thread_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bidder_email TEXT NOT NULL,
+            seller_email TEXT NOT NULL,
+            listing_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (bidder_email, seller_email, listing_id),
+            FOREIGN KEY (bidder_email) REFERENCES User_Login(email),
+            FOREIGN KEY (seller_email) REFERENCES User_Login(email)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Chat_Messages
+        (
+            message_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            thread_id    INTEGER NOT NULL,
+            sender_email TEXT    NOT NULL,
+            content      TEXT    NOT NULL,
+            sent_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (thread_id) REFERENCES Chat_Threads (thread_id) ON DELETE CASCADE,
+            FOREIGN KEY (sender_email) REFERENCES User_Login (email)
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+init_db()
+
+def create_notification(user_email, content, link=None):
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO Notifications (user_email, content, link) VALUES (?, ?, ?)",
+        (user_email,content,link)
+    )
+    conn.commit()
+    conn.close()
+
+@app.route('/notifications')
+def notifications():
+    if 'user_email' not in session:
+        return redirect('/')
+
+    user_email = session['user_email']
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT notification_id, content, link, is_read, created_at
+        FROM Notifications
+        WHERE user_email = ?
+        ORDER BY created_at DESC, notification_id DESC
+    ''', (user_email,))
+
+    notifs = []
+    for row in cursor.fetchall():
+        notifs.append({
+            'id': row[0],
+            'content': row[1],
+            'link': row[2],
+            'is_read': row[3],
+            'created_at': row[4]
+        })
+
+    conn.close()
+
+    return render_template('notifications.html',
+                           notifications=notifs,
+                           user_email=user_email,
+                           account_type=session.get('account_type'))
+
+
+@app.route('/notifications/mark_read/<int:notif_id>', methods=['POST'])
+def mark_notification_read(notif_id):
+    if 'user_email' not in session:
+        return redirect('/')
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+    #only marrk self noti
+    cursor.execute(
+        "UPDATE Notifications SET is_read = 1 WHERE notification_id = ? AND user_email = ?",
+        (notif_id, session['user_email'])
+    )
+    conn.commit()
+    conn.close()
+    return redirect('/notifications')
+
+
+@app.route('/notifications/mark_all_read', methods=['POST'])
+def mark_all_read():
+    if 'user_email' not in session:
+        return redirect('/')
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE Notifications SET is_read = 1 WHERE user_email = ?",
+        (session['user_email'],)
+    )
+    conn.commit()
+    conn.close()
+    return redirect('/notifications')
+
+@app.route('/notifications/delete/<int:notif_id>', methods=['POST'])
+def delete_notification(notif_id):
+    if 'user_email' not in session:
+        return redirect('/')
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "DELETE FROM Notifications WHERE notification_id = ? AND user_email = ?",
+        (notif_id, session['user_email'])
+    )
+    conn.commit()
+    conn.close()
+    return redirect('/notifications')
+
+@app.route('/notifications/delete_all', methods=['POST'])
+def delete_all_notifications():
+    if 'user_email' not in session:
+        return redirect('/')
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM Notifications WHERE user_email = ?",
+        (session['user_email'],)
+    )
+    conn.commit()
+    conn.close()
+    return redirect('/notifications')
+
 # Allows HTML pages to be updated by refreshing without having to rerun the code
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
@@ -690,6 +844,330 @@ def update_bank():
         conn.close()
 
     return redirect('/settings')
+
+@app.route('/search')
+def search():
+    if 'user_email' not in session:
+        return redirect('/')
+
+    query = request.args.get('q', '').strip()
+    selected_category = request.args.get('category', '').strip()
+    min_price = request.args.get('min_price', '').strip()
+    max_price = request.args.get('max_price', '').strip()
+    price_type = request.args.get('price_type', 'reserve')  # 默认按起始价筛
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    #every cate
+    cursor.execute("SELECT category_name FROM Categories ORDER BY category_name")
+    categories = [r[0] for r in cursor.fetchall()]
+
+    params = []
+    where_clauses = []    # 普通 WHERE 条件
+    having_clauses = []   # 聚合字段的 HAVING 条件
+
+    #keyword
+    if query:
+        where_clauses.append("(al.Auction_Title LIKE ? OR al.Product_Name LIKE ? OR al.Product_Description LIKE ?)")
+        kw = f'%{query}%'
+        params.extend([kw, kw, kw])
+
+    #cate
+    if selected_category:
+        where_clauses.append("al.Category = ?")
+        params.append(selected_category)
+
+    #price
+    price_expr_reserve = "CAST(REPLACE(REPLACE(al.Reserve_Price, '$', ''), ',', '') AS REAL)"
+    price_expr_bid = "COALESCE(MAX(b.Bid_Price), 0)"
+
+    if price_type == 'reserve':
+        #reserve price
+        if min_price:
+            try:
+                where_clauses.append(f"{price_expr_reserve} >= ?")
+                params.append(float(min_price))
+            except ValueError:
+                pass
+        if max_price:
+            try:
+                where_clauses.append(f"{price_expr_reserve} <= ?")
+                params.append(float(max_price))
+            except ValueError:
+                pass
+    else:
+        #current bid
+        if min_price:
+            try:
+                having_clauses.append(f"{price_expr_bid} >= ?")
+                params.append(float(min_price))
+            except ValueError:
+                pass
+        if max_price:
+            try:
+                having_clauses.append(f"{price_expr_bid} <= ?")
+                params.append(float(max_price))
+            except ValueError:
+                pass
+
+    sql_query = '''
+        SELECT 
+            al.Listing_ID,
+            al.Auction_Title,
+            al.Product_Name,
+            al.Category,
+            al.Reserve_Price,
+            COUNT(b.Bid_ID) AS bid_count,
+            MAX(b.Bid_Price) AS current_bid
+        FROM Auction_Listings al
+        LEFT JOIN Bids b 
+            ON al.Listing_ID = b.Listing_ID 
+            AND al.Seller_Email = b.Seller_Email
+        WHERE al.Status = 1
+    '''
+
+    if where_clauses:
+        sql_query += " AND " + " AND ".join(where_clauses)
+
+    sql_query += " GROUP BY al.Listing_ID, al.Seller_Email"
+
+    if having_clauses:
+        sql_query += " HAVING " + " AND ".join(having_clauses)
+
+    sql_query += " ORDER BY al.Listing_ID DESC"
+
+    cursor.execute(sql_query, params)
+
+    results = []
+    for row in cursor.fetchall():
+        results.append({
+            'listing_id': row[0],
+            'auction_title': row[1],
+            'product_name': row[2],
+            'category': row[3],
+            'reserve_price': row[4],
+            'bid_count': row[5],
+            'current_bid': row[6]
+        })
+
+    conn.close()
+
+    return render_template('search.html',
+                           results=results,
+                           categories=categories,
+                           query=query,
+                           selected_category=selected_category,
+                           min_price=min_price,
+                           max_price=max_price,
+                           price_type=price_type,
+                           user_email=session.get('user_email'),
+                           account_type=session.get('account_type'))
+
+@app.route('/chats')
+def chats_list():
+    #show all conversations
+    if 'user_email' not in session:
+        return redirect('/')
+
+    user_email = session['user_email']
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT 
+            ct.thread_id,
+            ct.bidder_email,
+            ct.seller_email,
+            ct.listing_id,
+            al.Product_Name,
+            al.Auction_Title,
+            COUNT(cm.message_id) AS msg_count,
+            MAX(cm.sent_at) AS last_msg_time,
+            (SELECT content FROM Chat_Messages 
+             WHERE thread_id = ct.thread_id 
+             ORDER BY sent_at DESC LIMIT 1) AS last_msg_preview
+        FROM Chat_Threads ct
+        LEFT JOIN Auction_Listings al 
+            ON ct.listing_id = al.Listing_ID AND ct.seller_email = al.Seller_Email
+        LEFT JOIN Chat_Messages cm ON ct.thread_id = cm.thread_id
+        WHERE ct.bidder_email = ? OR ct.seller_email = ?
+        GROUP BY ct.thread_id
+        ORDER BY last_msg_time DESC NULLS LAST, ct.created_at DESC
+    ''', (user_email, user_email))
+
+    threads = []
+    for row in cursor.fetchall():
+        threads.append({
+            'thread_id': row[0],
+            'bidder_email': row[1],
+            'seller_email': row[2],
+            'listing_id': row[3],
+            'product_name': row[4] or '(deleted listing)',
+            'auction_title': row[5] or '',
+            'msg_count': row[6],
+            'last_msg_time': row[7],
+            'last_msg_preview': row[8] or 'No messages yet',
+            'other_party': row[2] if row[1] == user_email else row[1],
+            'i_am_bidder': row[1] == user_email
+        })
+
+    conn.close()
+    return render_template('chats_list.html',
+                           threads=threads,
+                           user_email=user_email,
+                           account_type=session.get('account_type'))
+
+
+@app.route('/chat/<int:thread_id>', methods=['GET', 'POST'])
+def chat_view(thread_id):
+    #singal caht window
+    if 'user_email' not in session:
+        return redirect('/')
+
+    user_email = session['user_email']
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    #security check
+    cursor.execute('''
+        SELECT ct.bidder_email, ct.seller_email, ct.listing_id, al.Product_Name, al.Auction_Title
+        FROM Chat_Threads ct
+        LEFT JOIN Auction_Listings al 
+            ON ct.listing_id = al.Listing_ID AND ct.seller_email = al.Seller_Email
+        WHERE ct.thread_id = ?
+    ''', (thread_id,))
+    thread = cursor.fetchone()
+
+    if not thread:
+        conn.close()
+        return "Chat not found", 404
+
+    bidder_email, seller_email, listing_id, product_name, auction_title = thread
+
+    if user_email not in (bidder_email, seller_email):
+        conn.close()
+        return "Access denied", 403
+
+    #sending
+    if request.method == 'POST':
+        content = request.form.get('content', '').strip()
+        if content:
+            cursor.execute(
+                "INSERT INTO Chat_Messages (thread_id, sender_email, content) VALUES (?, ?, ?)",
+                (thread_id, user_email, content)
+            )
+            conn.commit()
+
+            #notify that guy
+            other_party = seller_email if user_email == bidder_email else bidder_email
+            try:
+                create_notification(
+                    other_party,
+                    f"New message about '{product_name or 'listing #' + str(listing_id)}'",
+                    f"/chat/{thread_id}"
+                )
+            except Exception as e:
+                print(f"Notification error: {e}")
+
+            conn.close()
+            return redirect(f'/chat/{thread_id}')
+
+    #load all messages
+    cursor.execute('''
+        SELECT message_id, sender_email, content, sent_at
+        FROM Chat_Messages
+        WHERE thread_id = ?
+        ORDER BY sent_at ASC, message_id ASC
+    ''', (thread_id,))
+
+    messages = []
+    for row in cursor.fetchall():
+        messages.append({
+            'id': row[0],
+            'sender': row[1],
+            'content': row[2],
+            'sent_at': row[3],
+            'is_mine': row[1] == user_email
+        })
+
+    conn.close()
+
+    other_party = seller_email if user_email == bidder_email else bidder_email
+    return render_template('chat_view.html',
+                           thread_id=thread_id,
+                           messages=messages,
+                           other_party=other_party,
+                           product_name=product_name or f"Listing #{listing_id}",
+                           auction_title=auction_title or '',
+                           listing_id=listing_id,
+                           user_email=user_email,
+                           account_type=session.get('account_type'))
+
+
+@app.route('/chat/start/<seller_email>/<int:listing_id>', methods=['POST'])
+def chat_start(seller_email, listing_id):
+    if 'user_email' not in session:
+        return redirect('/')
+
+    bidder_email = session['user_email']
+
+    #cant chat with self
+    if bidder_email == seller_email:
+        flash("You cannot chat with yourself.", "chat_error")
+        return redirect('/chats')
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    #exist?
+    cursor.execute('''
+        SELECT thread_id FROM Chat_Threads
+        WHERE bidder_email = ? AND seller_email = ? AND listing_id = ?
+    ''', (bidder_email, seller_email, listing_id))
+    existing = cursor.fetchone()
+
+    if existing:
+        thread_id = existing[0]
+    else:
+        cursor.execute('''
+            INSERT INTO Chat_Threads (bidder_email, seller_email, listing_id)
+            VALUES (?, ?, ?)
+        ''', (bidder_email, seller_email, listing_id))
+        thread_id = cursor.lastrowid
+        conn.commit()
+
+    conn.close()
+    return redirect(f'/chat/{thread_id}')
+
+
+@app.route('/chat/delete/<int:thread_id>', methods=['POST'])
+def chat_delete(thread_id):
+    #delete
+    if 'user_email' not in session:
+        return redirect('/')
+
+    user_email = session['user_email']
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    #security
+    cursor.execute(
+        "SELECT 1 FROM Chat_Threads WHERE thread_id = ? AND (bidder_email = ? OR seller_email = ?)",
+        (thread_id, user_email, user_email)
+    )
+    if not cursor.fetchone():
+        conn.close()
+        return "Access denied", 403
+
+    cursor.execute("DELETE FROM Chat_Messages WHERE thread_id = ?", (thread_id,))
+    cursor.execute("DELETE FROM Chat_Threads WHERE thread_id = ?", (thread_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/chats')
 
 if __name__ == '__main__':
     #app.run()
