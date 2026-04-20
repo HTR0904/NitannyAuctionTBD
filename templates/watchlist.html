@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>My Watchlist - Nittany Auction</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+
+    <style>
+        .bg-navy { background-color: #041E42; }
+        .text-navy { color: #041E42; }
+        .btn-navy { background-color: #041E42; color: white; border: none; }
+        .box { background: white; border: 1px solid #dee2e6; border-radius: 4px; box-shadow: 0 .125rem .25rem rgba(0,0,0,.075); }
+        .small-muted { font-size: 0.85rem; color: #6c757d; }
+    </style>
+</head>
+
+<body class="bg-light">
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-navy">
+    <div class="container">
+        <a class="navbar-brand font-weight-bold" href="{{ url_for('bidder') }}">Nittany Auction</a>
+
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarContent">
+            <form class="form-inline mx-auto my-2 my-lg-0" action="{{ url_for('bidder_search') }}" method="GET">
+                <input class="form-control mr-sm-2" type="search" name="query" placeholder="Search auctions" style="width: 350px">
+                <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Search</button>
+            </form>
+
+            <ul class="navbar-nav align-items-center">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('bidder') }}">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('bidder') }}#my-bids">My Bids</a>
+                </li>
+                <li class="nav-item mr-3">
+                    <a class="nav-link" href="{{ url_for('bidder') }}#ratings">Ratings</a>
+                </li>
+
+                <li class="nav-item mr-3">
+                    <a class="nav-link" href="/notifications" title="Notifications">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bell" viewBox="0 0 16 16">
+                            <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6"/>
+                        </svg>
+                    </a>
+                </li>
+
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle font-weight-bold text-white" href="#" id="profileDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                       Profile
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right shadow-sm" aria-labelledby="profileDropdown">
+                        <a class="dropdown-item" href="/settings">Account Settings</a>
+                        <a class="dropdown-item" href="/watchlist">My Watchlist</a>
+                        <a class="dropdown-item" href="/notifications">Notifications</a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item text-danger" href="{{ url_for('logout') }}">Logout</a>
+                    </div>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-4">
+
+    <div class="box p-4 mb-4">
+        <h2 class="text-navy font-weight-bold mb-2">My Watchlist</h2>
+        <p class="text-muted mb-0">Keep track of the auctions you are interested in.</p>
+    </div>
+
+    {% with success_msgs = get_flashed_messages(category_filter=["watch_success"]) %}
+      {% if success_msgs %}
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            {{ success_msgs[0] }}
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% with error_msgs = get_flashed_messages(category_filter=["watch_error"]) %}
+      {% if error_msgs %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            {{ error_msgs[0] }}
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        {% for item in watchlist %}
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 shadow-sm border-0">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title font-weight-bold text-navy">{{ item.title }}</h5>
+                        <p class="small-muted mb-1">{{ item.product_name }}</p>
+                        <p class="small-muted">{{ item.category or "Uncategorized" }}</p>
+
+                        <p class="mb-1 mt-2">
+                            Current bid:
+                            {% if item.current_bid > 0 %}
+                                <strong>${{ item.current_bid }}</strong>
+                            {% else %}
+                                <strong>No bids yet</strong>
+                            {% endif %}
+                        </p>
+
+                        <p class="mb-3">Total bids: {{ item.bid_count }}</p>
+
+                        <div class="mt-auto">
+                            <a class="btn btn-outline-primary btn-block mb-2 font-weight-bold"
+                               href="{{ url_for('auction_detail', listing_id=item.listing_id) }}">
+                                View Auction
+                            </a>
+
+                            <form action="{{ url_for('toggle_watchlist') }}" method="POST" class="m-0">
+                                <input type="hidden" name="seller_email" value="{{ item.seller_email }}">
+                                <input type="hidden" name="listing_id" value="{{ item.listing_id }}">
+                                <button type="submit" class="btn btn-warning btn-block font-weight-bold text-dark">
+                                    ★ Unwatch
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="col-12">
+                <div class="box p-5 text-center text-muted">
+                    <h5>You aren't watching any active auctions right now.</h5>
+                    <p>Go explore the dashboard or use the search bar to find some cool stuff.</p>
+                    <a href="{{ url_for('bidder') }}" class="btn btn-navy mt-3">Browse Auctions</a>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+
+</body>
+</html>

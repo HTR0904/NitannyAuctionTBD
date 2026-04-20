@@ -1,4 +1,3 @@
-from urllib.parse import urlparse
 from flask import Flask, flash, render_template, request, redirect, session, url_for
 import sqlite3 as sql
 import hashlib
@@ -169,19 +168,14 @@ def login_helpdesk():
 
 @app.route('/change_password', methods=['POST'])
 def change_password():
-
     user_email = session['user_email']
     current_password = request.form.get('current_password')
     new_password = request.form.get('new_password')
     confirm_new_password = request.form.get('confirm_new_password')
 
-    # Parse the referrer URL into a template filename (e.g., '/seller' -> 'seller.html')
-    # Defaults to 'dev_test.html' if the referrer is the root path '/'
-    raw_path = urlparse(request.referrer).path.strip('/')
-    template_name = f"{raw_path}.html" if raw_path else "dev_test.html"
-
     if new_password != confirm_new_password:
-        return render_template(template_name, password_error="New passwords do not match.")
+        flash("New passwords do not match.", "password_error")
+        return redirect('/settings')
 
     conn = sql.connect("dataset_tables.db")
     cursor = conn.cursor()
@@ -200,58 +194,72 @@ def change_password():
                            WHERE email = ?
                            ''', (hash_password(new_password), user_email))
             conn.commit()
-
-            return render_template(template_name, password_success="Your password has been updated successfully.")
+            flash("Your password has been updated successfully.", "password_success")
         else:
-            return render_template(template_name, password_error="Incorrect current password.")
+            flash("Incorrect current password.", "password_error")
 
     except sql.Error as e:
         print(f"Database error: {e}")
-        return render_template(template_name, password_error="An error occurred while updating your password.")
+        flash("An error occurred while updating your password.", "password_error")
     finally:
         conn.close()
 
-@app.route('/submit_ticket', methods=['POST'])
-def submit_ticket():
+    return redirect('/settings')
 
-    sender_email = session['user_email']
+def db_connect():
+    db = sql.connect("dataset_tables.db")
+    db.row_factory = sql.Row
+    return db
 
-    req_type = request.form.get('request_type')
-    req_desc = request.form.get('request_desc')
 
-    initial_status = 0
-    default_staff_email = 'unassigned@helpdesk.com'
+def bidder_only():
+    return 'user_email' in session and session.get('account_type') == '/bidder'
 
-    # Parse the referrer URL into a template filename
-    raw_path = urlparse(request.referrer).path.strip('/')
-    template_name = f"{raw_path}.html" if raw_path else "dev_test.html"
-
-    print(template_name)
-
-    if not req_type or not req_desc:
-        return render_template(template_name, helpdesk_req_error="Please fill out all helpdesk fields.")
-
-    conn = sql.connect("dataset_tables.db")
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute('''
-                       INSERT INTO Requests (sender_email, helpdesk_staff_email, request_type, request_desc,
-                                             request_status)
-                       VALUES (?, ?, ?, ?, ?)
-                       ''', (sender_email, default_staff_email, req_type, req_desc, initial_status))
-        conn.commit()
-        return render_template(template_name, helpdesk_req_success="Your request has been submitted successfully!")
-    except sql.Error as e:
-        print(f"Database error: {e}")
-        return render_template(template_name, helpdesk_req_error="An error occurred while submitting your request.")
-    finally:
-        conn.close()
 @app.route('/bidder')
 def bidder():
-    return render_template('bidders_home.html')
+    if not bidder_only():
+        return redirect('/')
+    # TODO: auction logic
+    return None
 
-@app.route('/seller')
+
+@app.route('/bidder/search')
+def bidder_search():
+   #TODO
+   return
+
+
+@app.route('/auction/<int:listing_id>')
+def auction_detail(listing_id):
+    #TODO: implement
+
+    """
+    Return something like this:
+    return render_template(
+        'auction_detail.html',
+        user_email=me,
+        item=item,
+        bids=bid_history,
+        my_bid=my_bid,
+        card_count=card_count,
+        is_watching=is_watching,
+        message=session.pop('bidder_msg', None)
+    )
+    """
+    return
+
+
+@app.route('/place_bid', methods=['POST'])
+def place_bid():
+   #TODO: implement
+   listing_id = "123"
+   return redirect(url_for('auction_detail', listing_id=listing_id))
+
+
+@app.route('/submit_rating', methods=['POST'])
+def submit_rating():
+    #TODO: implement
+    return redirect(url_for('bidder') + '#ratings')
 @app.route('/seller')
 def seller():
     if 'user_email' not in session or session.get('account_type') != '/seller':
@@ -368,41 +376,74 @@ def list_product():
     finally:
         conn.close()
 
+
+@app.route('/contact')
+def contact():
+    if 'user_email' not in session:
+        return redirect('/')
+
+    # Check if the URL has ?tab=category
+    is_category = request.args.get('tab') == 'category'
+
+    return render_template('contact.html', is_category=is_category)
+
+@app.route('/submit_ticket', methods=['POST'])
+def submit_ticket():
+    if 'user_email' not in session:
+        return redirect('/')
+
+    sender_email = session['user_email']
+    req_type = request.form.get('request_type')
+
+    initial_status = 0
+    # Per schema: initially assign to pseudo staff
+    assigned_staff_email = 'helpdeskteam@lsu.edu'
+
+    # Handle the difference between the two HTML forms right here in Python
+    if req_type == 'AddCategory':
+        cat_name = request.form.get('cat_name')
+        cat_reason = request.form.get('cat_reason')
+
+        if not cat_name or not cat_reason:
+            return render_template('contact.html', is_category=True,
+                                   helpdesk_req_error="Please fill out all category fields.")
+
+        # Format the description string for the database
+        req_desc = f"Requested Category: {cat_name}\nReason: {cat_reason}"
+        is_category_form = True  # Used to re-render the correct tab on failure/success
+
+    else:
+        req_desc = request.form.get('request_desc')
+        is_category_form = False
+
+        if not req_type or not req_desc:
+            return render_template('contact.html', is_category=False,
+                                   helpdesk_req_error="Please fill out all helpdesk fields.")
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    try:
+        # Insert the ticket with the pseudo staff assignment
+        cursor.execute('''
+                       INSERT INTO Requests (sender_email, helpdesk_staff_email, request_type, request_desc,
+                                             request_status)
+                       VALUES (?, ?, ?, ?, ?)
+                       ''', (sender_email, assigned_staff_email, req_type, req_desc, initial_status))
+
+        conn.commit()
+        return render_template('contact.html', is_category=is_category_form,
+                               helpdesk_req_success="Your request has been submitted successfully!")
+
+    except sql.Error as e:
+        print(f"Database error: {e}")
+        return render_template('contact.html', is_category=is_category_form,
+                               helpdesk_req_error="An error occurred while submitting your request.")
+    finally:
+        conn.close()
 @app.route('/helpdesk')
 def helpdesk():
     return render_template('helpdesk_home.html')
-
-#TODO: reconsolidate this with actual listing logic
-@app.route('/listing/<int:listing_id>')
-def view_listing(listing_id):
-    conn = sql.connect("dataset_tables.db")
-    cursor = conn.cursor()
-    # Grab the actual listing using the listing_id
-    cursor.execute('''SELECT * 
-                      FROM Auction_Listings 
-                      WHERE Listing_ID = ?
-                   ''', (listing_id,))
-    listing = cursor.fetchone()
-
-    if not listing:
-        conn.close()
-        return "Listing not found", 404 # 404 will trigger acutal browser behaviour
-
-    # Check watchlist status:
-    is_watching = False
-    if 'user_email' in session and session.get('account_type') == '/bidder':
-        cursor.execute('''
-                       SELECT 1
-                       FROM Watchlist
-                       WHERE Bidder_Email = ?
-                         AND Listing_ID = ?
-                       ''', (session['user_email'], listing_id))
-        is_watching = bool(cursor.fetchone())
-
-    conn.close()
-
-    # TODO: update html to be an actual one and not dev_test
-    return render_template('dev_test.html', listing=listing, is_watching=is_watching)
 
 @app.route('/toggle_watchlist', methods=['POST'])
 def toggle_watchlist():
@@ -451,7 +492,54 @@ def toggle_watchlist():
     finally:
         conn.close()
 
-    return redirect(request.referrer)
+    return redirect(request.referrer or url_for('bidder'))
+
+
+@app.route('/watchlist')
+def watchlist():
+    # Only logged-in bidders can view this page
+    if not bidder_only():
+        return redirect('/')
+
+    me = session['user_email']
+    db = db_connect()
+    cur = db.cursor()
+
+    try:
+        # Fetch all watched listings and calculate their current bid/count
+        cur.execute("""
+                    SELECT a.Listing_ID                                          AS listing_id,
+                           a.Seller_Email                                        AS seller_email,
+                           COALESCE(NULLIF(a.Auction_Title, ''), a.Product_Name) AS title,
+                           a.Product_Name                                        AS product_name,
+                           a.Category                                            AS category,
+                           a.Status                                              AS status_code,
+                           COALESCE(MAX(b.Bid_Price), 0)                         AS current_bid,
+                           COUNT(b.Bid_Price)                                    AS bid_count
+                    FROM Auction_Listings a
+                             JOIN Watchlist w
+                                  ON a.Listing_ID = w.Listing_ID
+                             LEFT JOIN Bids b
+                                       ON b.Listing_ID = a.Listing_ID
+                                           AND b.Seller_Email = a.Seller_Email
+                    WHERE w.Bidder_Email = ?
+                    GROUP BY a.Listing_ID, a.Seller_Email, a.Auction_Title,
+                             a.Product_Name, a.Category, a.Status
+                    ORDER BY a.Status = 1 DESC, a.Listing_ID DESC
+                    """, (me,))
+
+        watched_items = cur.fetchall()
+
+    except sql.Error as e:
+        print(f"Database error fetching watchlist: {e}")
+        watched_items = []
+        flash("An error occurred while loading your watchlist.", "watch_error")
+
+    finally:
+        db.close()
+
+    # 3. Pass the data to the template
+    return render_template('watchlist.html', watchlist=watched_items)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
