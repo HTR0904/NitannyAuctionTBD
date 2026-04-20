@@ -1,4 +1,3 @@
-from urllib.parse import urlparse
 from flask import Flask, flash, render_template, request, redirect, send_file, session, url_for
 import csv
 import hashlib
@@ -742,10 +741,6 @@ def submit_ticket():
                                helpdesk_req_error="An error occurred while submitting your request.")
     finally:
         conn.close()
-        
-@app.route('/helpdesk')
-def helpdesk():
-    return render_template('helpdesk_home.html')
 
 @app.route('/helpdesk/create_account', methods=['POST'])
 def create_helpdesk_account_route():
@@ -849,7 +844,6 @@ def update_ticket(ticket_id):
           "success" if result.rowcount else "danger")
     return redirect('/helpdesk')
 
-
 @app.route('/helpdesk/export/<fmt>')
 def export_helpdesk(fmt):
     if 'user_email' not in session or session.get('account_type') != '/helpdesk':
@@ -869,7 +863,6 @@ def export_helpdesk(fmt):
         )
     flash("Unsupported export format.", "danger")
     return redirect('/helpdesk')
-
 
 @app.route('/helpdesk')
 def helpdesk():
