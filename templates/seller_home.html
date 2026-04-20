@@ -53,9 +53,33 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-navy">
     <div class="container">
         <a class="navbar-brand font-weight-bold" href="/seller">Nittany Auction</a>
-        <div class="ml-auto d-flex align-items-center text-white">
-            <span class="mr-3">{{ current_user["full_name"] }}</span>
-            <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarContent">
+            <ul class="navbar-nav align-items-center ml-auto">
+                <li class="nav-item mr-3">
+                    <a class="nav-link" href="/notifications" title="Notifications">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bell" viewBox="0 0 16 16">
+                            <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6"/>
+                        </svg>
+                    </a>
+                </li>
+
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle font-weight-bold text-white" href="#" id="profileDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        {{ current_user["full_name"] }}
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right shadow-sm" aria-labelledby="profileDropdown">
+                        <a class="dropdown-item" href="/settings">Account Settings</a>
+                        <a class="dropdown-item" href="/notifications">Notifications</a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item text-danger" href="/logout">Logout</a>
+                    </div>
+                </li>
+            </ul>
         </div>
     </div>
 </nav>
@@ -88,7 +112,7 @@
                 <h1 class="display-4 font-weight-bold">Seller Dashboard</h1>
                 <p class="lead mb-4">Create listings, monitor auction progress, and send support or category requests to helpdesk from one place.</p>
                 <a href="#list-product" class="quick-link">Create New Listing</a>
-                <a href="#support-center" class="quick-link">Contact Helpdesk</a>
+                <a href="/contact" class="quick-link">Contact Helpdesk</a>
                 <a href="#auction-results" class="quick-link">View Results</a>
             </div>
             <div class="col-lg-5 mt-4 mt-lg-0">
@@ -128,7 +152,7 @@
                         <textarea name="product_description" class="form-control" rows="3" placeholder="Example: Used TI-84 calculator in good condition" required></textarea>
                     </div>
 
-                    <div class="form-row">
+                    <div class="form-row align-items-end">
                         <div class="form-group col-md-3">
                             <label>Category</label>
                             <select name="category" class="form-control" required>
@@ -160,38 +184,11 @@
         <div class="col-lg-5 mb-4" id="support-center">
             <div class="surface-card p-4 h-100">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h3 class="text-navy font-weight-bold mb-0">Seller Helpdesk Request</h3>
-                    <span class="pill">Live ticket intake</span>
+                    <h3 class="text-navy font-weight-bold mb-0">Seller Helpdesk</h3>
+                    <span class="pill">Support Portal</span>
                 </div>
-                <p class="text-muted">This sends a ticket directly to the helpdesk queue for staff review.</p>
-                <form action="/submit_ticket" method="POST">
-                    <div class="form-group">
-                        <label>Request type</label>
-                        <select class="form-control" name="request_type">
-                            <option>Listing Support</option>
-                            <option>Category Request</option>
-                            <option>Payment Question</option>
-                            <option>Account Access</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Subject</label>
-                        <input type="text" class="form-control" name="request_subject" placeholder="Need a category for art supplies" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Priority</label>
-                        <select class="form-control" name="priority">
-                            <option>Low</option>
-                            <option selected>Medium</option>
-                            <option>High</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Description</label>
-                        <textarea class="form-control" rows="4" name="request_desc" placeholder="Explain what you need help with." required></textarea>
-                    </div>
-                    <button type="submit" class="btn btn-navy">Send to Helpdesk</button>
-                </form>
+                <p class="text-muted">Need to resolve an issue with a listing, your account, or process a payment question? Submit a ticket directly to our support team.</p>
+                <a href="/contact" class="btn btn-navy mt-3">Go to Helpdesk</a>
             </div>
         </div>
     </div>
@@ -261,27 +258,8 @@
                     <h3 class="text-navy font-weight-bold mb-0">Request a New Category</h3>
                     <span class="pill">Routes to helpdesk</span>
                 </div>
-                <p class="text-muted">If your item does not fit the current options, send a category request to helpdesk. This button now submits a real ticket.</p>
-                <form action="/submit_ticket" method="POST">
-                    <input type="hidden" name="request_type" value="Category Request">
-                    <div class="form-group">
-                        <label>Requested Category Name</label>
-                        <input type="text" class="form-control" name="request_subject" placeholder="Enter requested category name" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Priority</label>
-                        <select class="form-control" name="priority">
-                            <option>Low</option>
-                            <option selected>Medium</option>
-                            <option>High</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Reason</label>
-                        <textarea class="form-control" rows="3" name="request_desc" placeholder="Explain why this category should be added" required></textarea>
-                    </div>
-                    <button type="submit" class="btn btn-navy">Submit Category Request</button>
-                </form>
+                <p class="text-muted">If your item does not fit the current options, send a category request to the helpdesk. Clicking below will redirect you to the support portal.</p>
+                <a href="/contact?tab=category" class="btn btn-navy mt-3">Submit Category Request</a>
             </div>
         </div>
 
