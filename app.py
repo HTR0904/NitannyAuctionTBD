@@ -1,4 +1,4 @@
-from flask import Flask, flash, render_template, request, redirect, send_file, session, url_for
+from flask import Flask, flash, render_template, request, redirect, send_file, session, url_for, jsonify
 import csv
 import hashlib
 import io
@@ -356,28 +356,30 @@ def collect_helpdesk_context():
     ensure_admin_schema()
     conn = get_connection(row_factory=True)
 
+    # Fetch Users
     users = conn.execute(
         f"SELECT email, full_name, role, user_status, created_at FROM {USERS_TABLE} ORDER BY created_at DESC"
     ).fetchall()
 
-    # Grab the raw categories
+    # Fetch ALL Categories
     raw_categories = conn.execute(
-        "SELECT parent_category, category_name FROM Categories ORDER BY parent_category, category_name"
+        "SELECT parent_category, category_name FROM Categories ORDER BY category_name"
     ).fetchall()
 
-    # Group them into a dictionary for the collapsible tree view
-    grouped_categories = {}
+    # Build a Full Tree Map (Parent -> [Children])
+    # This map will contain EVERYTHING, including the 'Root' key.
+    tree_map = {}
     for row in raw_categories:
         parent = row["parent_category"]
         child = row["category_name"]
-        if parent not in grouped_categories:
-            grouped_categories[parent] = []
-        grouped_categories[parent].append(child)
 
-    # Grab just the unique parent categories for our dropdown form
-    distinct_parents = conn.execute(
-        "SELECT DISTINCT parent_category FROM Categories ORDER BY parent_category"
-    ).fetchall()
+        if parent not in tree_map:
+            tree_map[parent] = []
+        tree_map[parent].append(child)
+
+    # Identify Top-Level Categories (Direct children of 'Root')
+    # These are the ones that will become the primary Accordion cards.
+    top_categories = tree_map.get('Root', [])
 
     tickets = conn.execute(
         f"""
@@ -392,19 +394,18 @@ def collect_helpdesk_context():
     metrics = {
         "total_users": len(users),
         "open_tickets": sum(1 for ticket in tickets if ticket["status"] != "Closed"),
-        "categories": len(raw_categories),  # Keeps the metric count accurate
+        "categories": len(raw_categories),
         "staff_members": sum(1 for user in users if user["role"] == "helpdesk"),
     }
 
     return {
         "users": users,
-        "categories": grouped_categories,  # Passing the grouped dict now
-        "distinct_parents": distinct_parents,
+        "tree_map": tree_map,
+        "top_categories": top_categories,
         "tickets": tickets,
         "metrics": metrics
     }
 
-    return redirect('/helpdesk')
 def build_export_rows():
     ensure_admin_schema()
     conn = get_connection(row_factory=True)
@@ -897,13 +898,6 @@ def bidder():
         completed_transactions=ratings,
         current_user=get_app_user(session['user_email']))
 
-
-@app.route('/bidder/search')
-def bidder_search():
-   #TODO
-   return
-
-
 @app.route('/auction/<int:listing_id>')
 def auction_detail(listing_id):
     if not bidder_only():
@@ -1146,17 +1140,17 @@ def seller():
         return redirect('/')
 
     seller_email = session['user_email']
-    conn = sql.connect(DB_NAME)
+    conn = sql.connect(DB_NAME)  # Or "dataset_tables.db" if you changed it globally
     cursor = conn.cursor()
 
-    cursor.execute("SELECT parent_category, category_name FROM Categories ORDER BY parent_category, category_name")
-    category_rows = cursor.fetchall()
-
-    grouped_categories = {}
-    for parent, child in category_rows:
-        if parent not in grouped_categories:
-            grouped_categories[parent] = []
-        grouped_categories[parent].append(child)
+    # Skip the 'Root' root node and fetch its direct children for the starting dropdown
+    cursor.execute('''
+        SELECT category_name 
+        FROM Categories 
+        WHERE parent_category = 'Root' 
+        ORDER BY category_name
+    ''')
+    top_categories = [r[0] for r in cursor.fetchall() if r[0]]
 
     cursor.execute(
         '''
@@ -1196,12 +1190,10 @@ def seller():
 
     return render_template(
         'seller_home.html',
-        categories=grouped_categories,
+        top_categories=top_categories,
         my_listings=my_listings,
         current_user=get_app_user(session['user_email']),
     )
-
-
 @app.route('/list_product', methods=['POST'])
 def list_product():
     if 'user_email' not in session or session.get('account_type') != '/seller':
@@ -1348,40 +1340,29 @@ def create_helpdesk_account_route():
 @app.route('/helpdesk/create_category', methods=['POST'])
 def create_category():
     if 'user_email' not in session or session.get('account_type') != '/helpdesk':
-        flash("You must be logged in as helpdesk to manage categories.", "auth_error")
-        return redirect(url_for('index'))
+        return redirect('/')
 
-    existing_parent = request.form.get('existing_parent')
-    new_parent = request.form.get('new_parent', '').strip()
-    child_category = request.form.get('child_category', '').strip()
+    parent_selection = request.form.get('existing_parent')  # From the AJAX drill-down
+    child_name = request.form.get('child_category', '').strip()
 
-    # Determine what the parent name should be based on the form logic
-    if existing_parent == 'NEW_PARENT' and new_parent:
-        final_parent = new_parent
-    elif existing_parent and existing_parent != 'NEW_PARENT':
-        final_parent = existing_parent
-    else:
-        flash("Please select a parent category or provide a new one.", "danger")
+    if not child_name:
+        flash("Please provide a category name.", "danger")
         return redirect('/helpdesk')
 
-    if not child_category:
-        flash("Please provide a subcategory name.", "danger")
-        return redirect('/helpdesk')
-
-    conn = get_connection()
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
+
     try:
-        # Insert directly into the official schema table
         cursor.execute(
             "INSERT INTO Categories (parent_category, category_name) VALUES (?, ?)",
-            (final_parent, child_category),
+            (parent_selection, child_name)
         )
         conn.commit()
-        flash("Category created successfully.", "success")
+        flash(f"Successfully added '{child_name}' under '{parent_selection}'.", "success")
     except sql.IntegrityError:
-        flash("That subcategory already exists under the selected parent.", "danger")
-    except sql.Error as e:
-        flash(f"Database error: {e}", "danger")
+        flash(f"The category '{child_name}' already exists under '{parent_selection}'.", "danger")
+    except Exception as e:
+        flash(f"Database Error: {e}", "danger")
     finally:
         conn.close()
 
@@ -1468,13 +1449,23 @@ def export_helpdesk(fmt):
     flash("Unsupported export format.", "danger")
     return redirect('/helpdesk')
 
+
 @app.route('/helpdesk')
 def helpdesk():
     if 'user_email' not in session or session.get('account_type') != '/helpdesk':
         flash("Please log in to continue.", "auth_error")
         return redirect(url_for('index'))
+
     ensure_app_user(session['user_email'], 'helpdesk')
     context = collect_helpdesk_context()
+
+    # Fetch true top-level categories (children of 'Root')
+    conn = sql.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT category_name FROM Categories WHERE parent_category = 'Root' ORDER BY category_name")
+    context["top_categories"] = [r[0] for r in cursor.fetchall()]
+    conn.close()
+
     context["current_user"] = get_app_user(session['user_email'])
     return render_template('helpdesk_home.html', **context)
 
@@ -1797,6 +1788,24 @@ def update_bank():
     return redirect('/settings')
 
 
+@app.route('/get_subcategories')
+def get_subcategories():
+    parent = request.args.get('parent')
+
+    if not parent:
+        return jsonify({"subcategories": []})
+
+    conn = sql.connect("dataset_tables.db")
+    cursor = conn.cursor()
+
+    # Query ONLY the direct children of the requested parent
+    cursor.execute("SELECT category_name FROM Categories WHERE parent_category = ?", (parent,))
+    subcategories = [row[0] for row in cursor.fetchall()]
+    conn.close()
+
+    return jsonify({"subcategories": subcategories})
+
+
 @app.route('/search')
 def search():
     if 'user_email' not in session:
@@ -1806,36 +1815,66 @@ def search():
     selected_category = request.args.get('category', '').strip()
     min_price = request.args.get('min_price', '').strip()
     max_price = request.args.get('max_price', '').strip()
-    price_type = request.args.get('price_type', 'reserve')  # 默认按起始价筛
+    price_type = request.args.get('price_type', 'reserve')  # Default to starting price
 
     conn = sql.connect("dataset_tables.db")
     cursor = conn.cursor()
 
-    #every cate
-    cursor.execute("SELECT category_name FROM Categories ORDER BY category_name")
-    categories = [r[0] for r in cursor.fetchall()]
+    # Skip the 'Root' root node and fetch its direct children as our starting point
+    cursor.execute('''
+                   SELECT category_name
+                   FROM Categories
+                   WHERE parent_category = 'Root'
+                   ORDER BY category_name
+                   ''')
+    top_categories = [r[0] for r in cursor.fetchall() if r[0]]
 
     params = []
-    where_clauses = []    # 普通 WHERE 条件
-    having_clauses = []   # 聚合字段的 HAVING 条件
+    where_clauses = []
+    having_clauses = []
+    breadcrumbs = []  # store reverse-lookup path
 
-    #keyword
+    # Keyword Filter
     if query:
         where_clauses.append("(al.Auction_Title LIKE ? OR al.Product_Name LIKE ? OR al.Product_Description LIKE ?)")
         kw = f'%{query}%'
         params.extend([kw, kw, kw])
 
-    #cate
+    # Category Filter & Reverse Breadcrumb Lookup
     if selected_category:
-        where_clauses.append("al.Category = ?")
-        params.append(selected_category)
 
-    #price
+        current_node = selected_category
+        while current_node:
+            breadcrumbs.insert(0, current_node)  # Insert at the front so it reads top-to-bottom
+            cursor.execute("SELECT parent_category FROM Categories WHERE category_name = ?", (current_node,))
+            row = cursor.fetchone()
+            # If a parent exists, set it as the new current_node to continue the loop
+            if row and row[0]:
+                current_node = row[0]
+            else:
+                current_node = None
+
+        descendants = [selected_category]
+        categories_to_check = [selected_category]
+
+        # Loop through the database to find all children, grandchildren, etc.
+        while categories_to_check:
+            current = categories_to_check.pop(0)
+            cursor.execute("SELECT category_name FROM Categories WHERE parent_category = ?", (current,))
+            children = [row[0] for row in cursor.fetchall()]
+            descendants.extend(children)
+            categories_to_check.extend(children)
+
+        # Dynamically build an IN (?, ?, ?) clause based on how many descendants we found
+        placeholders = ', '.join(['?'] * len(descendants))
+        where_clauses.append(f"al.Category IN ({placeholders})")
+        params.extend(descendants)
+
+    # Price Filter Logic
     price_expr_reserve = "CAST(REPLACE(REPLACE(al.Reserve_Price, '$', ''), ',', '') AS REAL)"
     price_expr_bid = "COALESCE(MAX(b.Bid_Price), 0)"
 
     if price_type == 'reserve':
-        #reserve price
         if min_price:
             try:
                 where_clauses.append(f"{price_expr_reserve} >= ?")
@@ -1849,7 +1888,6 @@ def search():
             except ValueError:
                 pass
     else:
-        #current bid
         if min_price:
             try:
                 having_clauses.append(f"{price_expr_bid} >= ?")
@@ -1863,21 +1901,21 @@ def search():
             except ValueError:
                 pass
 
+    # Main Query Assembly
     sql_query = '''
-        SELECT 
-            al.Listing_ID,
-            al.Auction_Title,
-            al.Product_Name,
-            al.Category,
-            al.Reserve_Price,
-            COUNT(b.Bid_ID) AS bid_count,
-            MAX(b.Bid_Price) AS current_bid
-        FROM Auction_Listings al
-        LEFT JOIN Bids b 
-            ON al.Listing_ID = b.Listing_ID 
-            AND al.Seller_Email = b.Seller_Email
-        WHERE al.Status = 1
-    '''
+                SELECT al.Listing_ID, \
+                       al.Auction_Title, \
+                       al.Product_Name, \
+                       al.Category, \
+                       al.Reserve_Price, \
+                       COUNT(b.Bid_ID)  AS bid_count, \
+                       MAX(b.Bid_Price) AS current_bid
+                FROM Auction_Listings al
+                         LEFT JOIN Bids b
+                                   ON al.Listing_ID = b.Listing_ID
+                                       AND al.Seller_Email = b.Seller_Email
+                WHERE al.Status = 1 \
+                '''
 
     if where_clauses:
         sql_query += " AND " + " AND ".join(where_clauses)
@@ -1907,7 +1945,8 @@ def search():
 
     return render_template('search.html',
                            results=results,
-                           categories=categories,
+                           top_categories=top_categories,
+                           breadcrumbs=breadcrumbs,  # <-- THIS WAS THE MISSING LINK!
                            query=query,
                            selected_category=selected_category,
                            min_price=min_price,
@@ -1915,7 +1954,6 @@ def search():
                            price_type=price_type,
                            user_email=session.get('user_email'),
                            account_type=session.get('account_type'))
-
 @app.route('/chats')
 def chats_list():
     #show all conversations

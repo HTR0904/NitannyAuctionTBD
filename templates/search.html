@@ -43,7 +43,6 @@
     <h2 class="text-navy font-weight-bold mb-4">Browse Listings</h2>
 
     <form action="/search" method="GET">
-        <!--search-->
         <div class="input-group input-group-lg mb-4">
             <input type="text" name="q" class="form-control"
                    placeholder="Search by title or product name..." value="{{ query or '' }}">
@@ -53,21 +52,38 @@
         </div>
 
         <div class="row">
-            <!--filter-->
             <div class="col-md-3">
                 <div class="filter-panel">
                     <h5 class="text-navy mb-3">Filters</h5>
 
-                    <div class="form-group">
-                        <label><small><strong>Category</strong></small></label>
-                        <select name="category" class="form-control form-control-sm">
-                            <option value="">All Categories</option>
-                            {% for cat in categories %}
-                            <option value="{{ cat }}" {% if cat == selected_category %}selected{% endif %}>
-                                {{ cat }}
-                            </option>
-                            {% endfor %}
-                        </select>
+                    <div class="form-group mb-4" id="category-container">
+                        <label><small><strong>Category Drill-down</strong></small></label>
+
+                        {% if breadcrumbs %}
+                            <div id="active-category-display" class="mb-3 p-2 border rounded bg-white shadow-sm">
+                                <small class="text-muted d-block mb-1">Active Filter:</small>
+                                {% for crumb in breadcrumbs %}
+                                    <span class="badge badge-info">{{ crumb }}</span>
+                                    {% if not loop.last %}<small class="text-muted">&gt;</small>{% endif %}
+                                {% endfor %}
+                                <button type="button" id="clear-category-btn" class="btn btn-sm btn-outline-danger btn-block mt-2 py-0">Clear & Change</button>
+                            </div>
+                        {% endif %}
+
+                        <div id="dropdown-wrapper" {% if breadcrumbs %}style="display: none;"{% endif %}>
+                            <div id="select-group">
+                                <select class="form-control form-control-sm dynamic-category mb-2">
+                                    <option value="" selected>All Categories</option>
+                                    {% for cat in top_categories %}
+                                        <option value="{{ cat }}">{{ cat }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <small class="form-text text-muted mt-1">Select to dynamically load subcategories.</small>
+                        </div>
+
+                        <input type="hidden" name="category" id="final_category_input" value="{{ selected_category or '' }}">
+                        <input type="hidden" name="category" id="final_category_input" value="{{ selected_category or '' }}">
                     </div>
 
                     <div class="form-group">
@@ -94,14 +110,15 @@
                 </div>
             </div>
 
-            <!--results-->
             <div class="col-md-9">
                 <p class="text-muted">
                     {% if results %}
                         Showing <strong>{{ results|length }}</strong> result{{ 's' if results|length != 1 }}
                         {% if query %} for "<strong>{{ query }}</strong>"{% endif %}
+                        {% if selected_category %} in "<strong>{{ selected_category }}</strong>"{% endif %}
                     {% else %}
                         No results {% if query %}for "<strong>{{ query }}</strong>"{% endif %}
+                        {% if selected_category %} in "<strong>{{ selected_category }}</strong>"{% endif %}
                     {% endif %}
                 </p>
 
@@ -147,6 +164,51 @@
         </div>
     </form>
 </div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.min.js" crossorigin="anonymous"></script> <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" crossorigin="anonymous"></script>
+
+<script>
+$(document).ready(function() {
+    $('#category-container').on('change', '.dynamic-category', function() {
+        var $currentSelect = $(this);
+        var selectedValue = $currentSelect.val();
+
+        // Clear out any sub-dropdowns that appear AFTER the one we just changed
+        $currentSelect.nextAll('.dynamic-category').remove();
+
+        // Set the hidden input to the current selection so it passes to the backend
+        $('#final_category_input').val(selectedValue);
+
+        if (selectedValue) {
+            // Ping the get_subcategories to see if this category has children
+            $.getJSON('/get_subcategories', { parent: selectedValue }, function(data) {
+
+                if (data.subcategories && data.subcategories.length > 0) {
+                    // Create a new dropdown with a bottom margin
+                    var $newSelect = $('<select class="form-control form-control-sm dynamic-category mb-2"></select>');
+                    $newSelect.append('<option value="" selected disabled>Select Subcategory...</option>');
+
+                    data.subcategories.forEach(function(child) {
+                        $newSelect.append('<option value="' + child + '">' + child + '</option>');
+                    });
+
+                    // Insert it directly AFTER the dropdown we just changed!
+                    $currentSelect.after($newSelect);
+                }
+            });
+        }
+    });
+
+    // Handle the 'Clear & Change' button
+    $('#clear-category-btn').click(function(e) {
+        e.preventDefault();
+        $('#active-category-display').remove(); // Destroy the breadcrumb box
+        $('#final_category_input').val('');     // Wipe the hidden input
+        $('#dropdown-wrapper').slideDown('fast'); // Reveal the dropdown to start fresh
+    });
+});
+</script>
 
 </body>
 </html>
