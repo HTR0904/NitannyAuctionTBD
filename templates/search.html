@@ -109,8 +109,9 @@
                 <div class="result-card">
                     <div class="row">
                         <div class="col-md-8">
+
                             <h5 class="mb-1">
-                                <a href="/listing/{{ item.listing_id }}" class="text-navy text-decoration-none">
+                                <a href="/auction/{{ item.listing_id }}" class="text-navy text-decoration-none">
                                     {{ item.auction_title }}
                                 </a>
                             </h5>
@@ -131,6 +132,7 @@
                                 <small class="text-muted">Starting from {{ item.reserve_price }}</small>
                             {% endif %}
                         </div>
+
                     </div>
                 </div>
                 {% endfor %}

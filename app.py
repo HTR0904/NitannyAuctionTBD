@@ -711,12 +711,191 @@ def db_connect():
 def bidder_only():
     return 'user_email' in session and session.get('account_type') == '/bidder'
 
+def bidder_msg(kind, text):
+    session['bidder_msg'] = {'kind': kind, 'text': text}
+
+
+def auction_sql(extra_where="", ending=""):
+    return f"""
+        SELECT
+            a.Listing_ID AS listing_id,
+            a.Seller_Email AS seller_email,
+            COALESCE(NULLIF(a.Auction_Title, ''), a.Product_Name) AS title,
+            a.Product_Name AS product_name,
+            a.Product_Description AS description,
+            a.Category AS category,
+            a.Reserve_Price AS reserve_price,
+            a.Status AS status_code,
+            (
+                SELECT COALESCE(MAX(b.Bid_Price), 0)
+                FROM Bids b
+                WHERE b.Seller_Email = a.Seller_Email
+                  AND b.Listing_ID = a.Listing_ID
+            ) AS current_bid,
+            (
+                SELECT COUNT(*)
+                FROM Bids b
+                WHERE b.Seller_Email = a.Seller_Email
+                  AND b.Listing_ID = a.Listing_ID
+            ) AS bid_count,
+            (
+                SELECT COALESCE(MAX(b.Bid_Price), 0) + 1
+                FROM Bids b
+                WHERE b.Seller_Email = a.Seller_Email
+                  AND b.Listing_ID = a.Listing_ID
+            ) AS min_bid,
+            (
+                SELECT ROUND(AVG(r.Rating), 1)
+                FROM Ratings r
+                WHERE r.Seller_Email = a.Seller_Email
+            ) AS seller_rating,
+            (
+                SELECT COUNT(*)
+                FROM Ratings r
+                WHERE r.Seller_Email = a.Seller_Email
+            ) AS rating_count
+        FROM Auction_Listings a
+        WHERE a.Status = 1
+          AND a.Seller_Email <> ?
+          {extra_where}
+        ORDER BY bid_count DESC, current_bid DESC, a.Listing_ID DESC
+        {ending}
+    """
+
+
+
+def load_my_bids(cur, me):
+    cur.execute("""
+        SELECT
+            a.Listing_ID AS listing_id,
+            a.Seller_Email AS seller_email,
+            COALESCE(NULLIF(a.Auction_Title, ''), a.Product_Name) AS title,
+            a.Product_Name AS product_name,
+            a.Category AS category,
+            a.Status AS status_code,
+            MAX(CASE WHEN b.Bidder_Email = ? THEN b.Bid_Price END) AS my_bid,
+            MAX(b.Bid_Price) AS high_bid,
+            COUNT(b.Bid_ID) AS bid_count,
+            (
+                SELECT b2.Bidder_Email
+                FROM Bids b2
+                WHERE b2.Seller_Email = a.Seller_Email
+                  AND b2.Listing_ID = a.Listing_ID
+                ORDER BY b2.Bid_Price DESC, b2.Bid_ID ASC
+                LIMIT 1
+            ) AS leader,
+            (
+                SELECT t.Transaction_ID
+                FROM Transactions t
+                WHERE t.Seller_Email = a.Seller_Email
+                  AND t.Listing_ID = a.Listing_ID
+                  AND t.Bidder_Email = ?
+                LIMIT 1
+            ) AS won_transaction
+        FROM Auction_Listings a
+        JOIN Bids b
+            ON b.Seller_Email = a.Seller_Email
+           AND b.Listing_ID = a.Listing_ID
+        WHERE EXISTS (
+            SELECT 1
+            FROM Bids mine
+            WHERE mine.Seller_Email = a.Seller_Email
+              AND mine.Listing_ID = a.Listing_ID
+              AND mine.Bidder_Email = ?
+        )
+        GROUP BY
+            a.Seller_Email,
+            a.Listing_ID,
+            a.Auction_Title,
+            a.Product_Name,
+            a.Category,
+            a.Status
+        ORDER BY a.Status = 1 DESC, a.Listing_ID DESC
+    """, (me, me, me))
+
+    rows = []
+
+    for row in cur.fetchall():
+        item = dict(row)
+        item['status'] = 'Active' if item['status_code'] == 1 else 'Closed'
+
+        if item['won_transaction']:
+            item['standing'] = 'Won'
+        elif item['status_code'] == 1 and item['leader'] == me:
+            item['standing'] = 'Winning'
+        elif item['status_code'] == 1:
+            item['standing'] = 'Outbid'
+        elif item['leader'] == me:
+            item['standing'] = 'Highest When Closed'
+        else:
+            item['standing'] = 'Closed'
+
+        rows.append(item)
+
+    return rows
+
+
+def load_ratings(cur, me):
+    cur.execute("""
+        SELECT
+            t.Transaction_ID AS transaction_id,
+            t.Seller_Email AS seller_email,
+            t.Listing_ID AS listing_id,
+            t.Date AS sold_date,
+            t.Payment AS payment,
+            COALESCE(NULLIF(a.Auction_Title, ''), a.Product_Name) AS title,
+            a.Product_Name AS product_name,
+            r.Rating AS rating,
+            r.Rating_Desc AS rating_desc
+        FROM Transactions t
+        JOIN Auction_Listings a
+            ON a.Seller_Email = t.Seller_Email
+           AND a.Listing_ID = t.Listing_ID
+        LEFT JOIN Ratings r
+            ON r.Bidder_Email = t.Bidder_Email
+           AND r.Seller_Email = t.Seller_Email
+        WHERE t.Bidder_Email = ?
+        ORDER BY t.Transaction_ID DESC
+        LIMIT 30
+    """, (me,))
+
+    return cur.fetchall()
+
 @app.route('/bidder')
 def bidder():
     if not bidder_only():
         return redirect('/')
-    # TODO: auction logic
-    return render_template("bidders_home.html", current_user=get_app_user(session['user_email']))
+
+    me = session['user_email']
+    db = db_connect()
+    cur = db.cursor()
+
+    cur.execute("""
+                SELECT COUNT(*) AS total
+                FROM Credit_Cards
+                WHERE Owner_email = ?
+                """, (me,))
+    card_count = cur.fetchone()['total']
+
+    cur.execute(auction_sql(ending="LIMIT 3"), (me,))
+    trending = cur.fetchall()
+
+    my_bids = load_my_bids(cur, me)
+    ratings = load_ratings(cur, me)
+
+    db.close()
+
+    return render_template(
+        'bidders_home.html',
+        mode='home',
+        user_email=me,
+        query='',
+        message=session.pop('bidder_msg', None),
+        card_count=card_count,
+        trending_listings=trending,
+        my_bids=my_bids,
+        completed_transactions=ratings,
+        current_user=get_app_user(session['user_email']))
 
 
 @app.route('/bidder/search')
@@ -727,10 +906,93 @@ def bidder_search():
 
 @app.route('/auction/<int:listing_id>')
 def auction_detail(listing_id):
-    #TODO: implement
+    if not bidder_only():
+        return redirect('/')
 
-    """
-    Return something like this:
+    me = session['user_email']
+    db = db_connect()
+    cur = db.cursor()
+
+    cur.execute("""
+        SELECT COUNT(*) AS total
+        FROM Credit_Cards
+        WHERE Owner_email = ?
+    """, (me,))
+    card_count = cur.fetchone()['total']
+
+    cur.execute("""
+        SELECT
+            a.Listing_ID AS listing_id,
+            a.Seller_Email AS seller_email,
+            COALESCE(NULLIF(a.Auction_Title, ''), a.Product_Name) AS title,
+            a.Product_Name AS product_name,
+            a.Product_Description AS description,
+            a.Category AS category,
+            a.Reserve_Price AS reserve_price,
+            a.Status AS status_code,
+            (
+                SELECT COALESCE(MAX(b.Bid_Price), 0)
+                FROM Bids b
+                WHERE b.Seller_Email = a.Seller_Email
+                  AND b.Listing_ID = a.Listing_ID
+            ) AS current_bid,
+            (
+                SELECT COUNT(*)
+                FROM Bids b
+                WHERE b.Seller_Email = a.Seller_Email
+                  AND b.Listing_ID = a.Listing_ID
+            ) AS bid_count,
+            (
+                SELECT COALESCE(MAX(b.Bid_Price), 0) + 1
+                FROM Bids b
+                WHERE b.Seller_Email = a.Seller_Email
+                  AND b.Listing_ID = a.Listing_ID
+            ) AS min_bid,
+            (
+                SELECT ROUND(AVG(r.Rating), 1)
+                FROM Ratings r
+                WHERE r.Seller_Email = a.Seller_Email
+            ) AS seller_rating,
+            (
+                SELECT COUNT(*)
+                FROM Ratings r
+                WHERE r.Seller_Email = a.Seller_Email
+            ) AS rating_count
+        FROM Auction_Listings a
+        WHERE a.Listing_ID = ?
+    """, (listing_id,))
+    item = cur.fetchone()
+
+    if item is None:
+        db.close()
+        bidder_msg('danger', 'Auction not found.')
+        return redirect(url_for('bidder'))
+
+    cur.execute("""
+        SELECT Bidder_Email AS bidder_email, Bid_Price AS bid_price
+        FROM Bids
+        WHERE Seller_Email = ?
+          AND Listing_ID = ?
+        ORDER BY Bid_Price DESC, Bid_ID ASC
+        LIMIT 10
+    """, (item['seller_email'], listing_id))
+    bid_history = cur.fetchall()
+
+    cur.execute("""
+        SELECT MAX(Bid_Price) AS my_bid
+        FROM Bids
+        WHERE Seller_Email = ?
+          AND Listing_ID = ?
+          AND Bidder_Email = ?
+    """, (item['seller_email'], listing_id, me))
+    my_bid = cur.fetchone()['my_bid']
+
+    db.close()
+
+    #TODO: add watchlist
+
+    is_watching = False # Temp
+
     return render_template(
         'auction_detail.html',
         user_email=me,
@@ -741,22 +1003,142 @@ def auction_detail(listing_id):
         is_watching=is_watching,
         message=session.pop('bidder_msg', None)
     )
-    """
-    return
-
 
 @app.route('/place_bid', methods=['POST'])
 def place_bid():
-   #TODO: implement
-   listing_id = "123"
-   return redirect(url_for('auction_detail', listing_id=listing_id))
+    if not bidder_only():
+        return redirect('/')
+
+    me = session['user_email']
+    listing_id = request.form.get('listing_id', type=int)
+
+    try:
+        price = int(request.form.get('bid_price', ''))
+    except ValueError:
+        bidder_msg('danger', 'Please enter a valid whole-dollar bid.')
+        return redirect(url_for('auction_detail', listing_id=listing_id))
+
+    db = db_connect()
+    cur = db.cursor()
+
+    try:
+        cur.execute("""
+            SELECT Seller_Email, Status
+            FROM Auction_Listings
+            WHERE Listing_ID = ?
+        """, (listing_id,))
+        item = cur.fetchone()
+
+        if item is None:
+            bidder_msg('danger', 'Auction not found.')
+            return redirect(url_for('bidder'))
+
+        seller = item['Seller_Email']
+
+        if seller == me:
+            bidder_msg('danger', 'You cannot bid on your own auction.')
+        elif item['Status'] != 1:
+            bidder_msg('danger', 'This auction is not active.')
+        else:
+            cur.execute("""
+                SELECT 1
+                FROM Credit_Cards
+                WHERE Owner_email = ?
+                LIMIT 1
+            """, (me,))
+
+            if cur.fetchone() is None:
+                bidder_msg('danger', 'Add a credit card before placing a bid.')
+            else:
+                cur.execute("""
+                    SELECT COALESCE(MAX(Bid_Price), 0) + 1 AS needed
+                    FROM Bids
+                    WHERE Seller_Email = ?
+                      AND Listing_ID = ?
+                """, (seller, listing_id))
+                needed = cur.fetchone()['needed']
+
+                if price < needed:
+                    bidder_msg('danger', f'Your bid must be at least ${needed}.')
+                else:
+                    cur.execute("""
+                        INSERT INTO Bids
+                            (Seller_Email, Listing_ID, Bidder_Email, Bid_Price)
+                        VALUES (?, ?, ?, ?)
+                    """, (seller, listing_id, me, price))
+                    db.commit()
+                    bidder_msg('success', 'Your bid was placed.')
+
+    except sql.Error as e:
+        db.rollback()
+        print("Bid error:", e)
+        bidder_msg('danger', 'Something went wrong while placing your bid.')
+
+    finally:
+        db.close()
+
+    return redirect(url_for('auction_detail', listing_id=listing_id))
 
 
 @app.route('/submit_rating', methods=['POST'])
 def submit_rating():
-    #TODO: implement
-    return redirect(url_for('bidder') + '#ratings')
+    if not bidder_only():
+        return redirect('/')
 
+    me = session['user_email']
+    seller = request.form.get('seller_email')
+    listing_id = request.form.get('listing_id', type=int)
+    stars = request.form.get('rating', type=int)
+    note = request.form.get('rating_desc', '').strip()
+
+    if stars not in [1, 2, 3, 4, 5]:
+        bidder_msg('danger', 'Please choose a rating from 1 to 5.')
+        return redirect(url_for('bidder') + '#ratings')
+
+    db = db_connect()
+    cur = db.cursor()
+
+    try:
+        cur.execute("""
+            SELECT 1
+            FROM Transactions
+            WHERE Seller_Email = ?
+              AND Listing_ID = ?
+              AND Bidder_Email = ?
+            LIMIT 1
+        """, (seller, listing_id, me))
+
+        if cur.fetchone() is None:
+            bidder_msg('danger', 'You can only rate sellers after a completed purchase.')
+        else:
+            cur.execute("""
+                SELECT 1
+                FROM Ratings
+                WHERE Bidder_Email = ?
+                  AND Seller_Email = ?
+                LIMIT 1
+            """, (me, seller))
+
+            if cur.fetchone():
+                bidder_msg('warning', 'You already rated this seller.')
+            else:
+                cur.execute("""
+                    INSERT INTO Ratings
+                        (Bidder_Email, Seller_Email, Date, Rating, Rating_Desc)
+                    VALUES (?, ?, date('now'), ?, ?)
+                """, (me, seller, stars, note or None))
+                db.commit()
+                bidder_msg('success', 'Rating submitted.')
+
+    except sql.Error as e:
+        db.rollback()
+        print("Rating error:", e)
+        bidder_msg('danger', 'Something went wrong while saving your rating.')
+
+    finally:
+        db.close()
+
+    return redirect(url_for('bidder') + '#ratings')
 
 @app.route('/seller')
 def seller():
