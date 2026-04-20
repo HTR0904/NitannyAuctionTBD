@@ -150,58 +150,103 @@
 
         <div class="col-lg-6 mb-4">
             <div class="work-card p-4 h-100">
-                <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="font-weight-bold mb-0">Category Management</h3><span class="pill">Direct admin add</span></div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="font-weight-bold mb-0">Category Management</h3>
+                    <span class="pill">Direct admin add</span>
+                </div>
 
                 <form action="/helpdesk/create_category" method="POST" class="mb-4" id="categoryForm">
-                    <div class="form-group">
-                        <label>Parent Category</label>
-                        <select class="form-control" name="existing_parent" id="parentSelect" required>
-                            <option value="" selected disabled>Select Parent Category...</option>
-                            <option value="NEW_PARENT" class="font-weight-bold text-success">++ Create New Parent ++</option>
-                            {% for parent in distinct_parents %}
-                                <option value="{{ parent['parent_category'] }}">{{ parent['parent_category'] }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="form-group" id="newParentDiv" style="display: none;">
-                        <label>New Parent Name</label>
-                        <input type="text" class="form-control" name="new_parent" id="newParentInput" placeholder="e.g. Vehicles">
+                    <div class="form-group" id="category-container">
+                        <label class="font-weight-bold">Select Parent Location</label>
+                        <div id="select-group">
+                            <select class="form-control form-control-sm dynamic-category mb-2">
+                                <option value="Root" selected>Root (Top Level)</option>
+                                {% for cat in top_categories %}
+                                    <option value="{{ cat }}">{{ cat }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <input type="hidden" name="existing_parent" id="final_category_input" value="Root">
                     </div>
 
                     <div class="form-group">
-                        <label>Subcategory Name</label>
-                        <input type="text" class="form-control" name="child_category" placeholder="e.g. Bicycles" required>
+                        <label class="font-weight-bold">New Category Name</label>
+                        <input type="text" class="form-control" name="child_category"
+                               placeholder="e.g., Laptops or Smartphones" required>
+                        <small class="text-muted">This will be created directly inside your selection above.</small>
                     </div>
-                    <button type="submit" class="btn btn-navy">Add Category</button>
+
+                    <button type="submit" class="btn btn-navy btn-block">Add Category</button>
                 </form>
 
-                    <div class="category-tree mt-4">
-                        <h5 class="font-weight-bold mb-3">Current Hierarchy</h5>
+                <div class="category-tree mt-4">
+                    <h5 class="font-weight-bold mb-3">Current Hierarchy</h5>
 
-                        <div class="table-wrap pr-2">
-                            <div class="accordion" id="categoryAccordion">
-                                {% for parent, children in categories.items() %}
+                    {% macro render_node(node_name, tree_map, level=1) %}
+                        <li class="py-1">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-muted">
+                                    {{ "↳ " if level > 1 else "" }}{{ node_name }}
+                                </span>
+
+                                {% if node_name in tree_map %}
+                                    <button class="btn btn-sm btn-link text-navy p-0"
+                                            type="button" data-toggle="collapse"
+                                            data-target="#nest-{{ node_name|replace(' ', '-') }}"
+                                            aria-expanded="false">
+                                        <small class="font-weight-bold">+ View Sub-items</small>
+                                    </button>
+                                {% endif %}
+                            </div>
+
+                            {% if node_name in tree_map %}
+                                <div class="collapse pl-3 ml-2 border-left" id="nest-{{ node_name|replace(' ', '-') }}">
+                                    <ul class="list-unstyled mb-0 mt-1">
+                                        {% for sub_child in tree_map[node_name] %}
+                                            {{ render_node(sub_child, tree_map, level + 1) }}
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% endif %}
+                        </li>
+                    {% endmacro %}
+
+                    <div class="table-wrap pr-2">
+                        <div class="accordion" id="categoryAccordion">
+                            {% for parent in top_categories %}
                                 <div class="card border-0 mb-2 shadow-sm" style="border-radius: 12px; overflow: hidden;">
-                                    <div class="card-header bg-white border-0 py-3" id="heading-{{ loop.index }}" style="cursor: pointer;" data-toggle="collapse" data-target="#collapse-{{ loop.index }}" aria-expanded="false" aria-controls="collapse-{{ loop.index }}">
+                                    <div class="card-header bg-white border-0 py-3" id="heading-{{ loop.index }}"
+                                         style="cursor: pointer;" data-toggle="collapse"
+                                         data-target="#collapse-{{ loop.index }}" aria-expanded="false">
+
                                         <h6 class="mb-0 text-navy font-weight-bold d-flex justify-content-between align-items-center">
-                                            <span>📁 {{ parent }}</span>
-                                            <span class="badge badge-light border text-muted">{{ children|length }} subcategories</span>
+                                            <span><span class="text-muted mr-2"></span>{{ parent }}</span>
+                                            {% if parent in tree_map %}
+                                                <span class="badge badge-pill badge-light border text-muted" style="font-size: 0.75rem;">
+                                                    {{ tree_map[parent]|length }} subcategories
+                                                </span>
+                                            {% endif %}
                                         </h6>
                                     </div>
 
-                                    <div id="collapse-{{ loop.index }}" class="collapse" aria-labelledby="heading-{{ loop.index }}" data-parent="#categoryAccordion">
+                                    <div id="collapse-{{ loop.index }}" class="collapse" data-parent="#categoryAccordion">
                                         <div class="card-body bg-light py-2 px-4 border-top">
                                             <ul class="list-unstyled mb-0">
-                                                {% for child in children %}
-                                                <li class="py-2 text-muted border-bottom last-border-none">↳ {{ child }}</li>
-                                                {% endfor %}
+                                                {% if parent in tree_map %}
+                                                    {% for child in tree_map[parent] %}
+                                                        {{ render_node(child, tree_map) }}
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <li class="text-muted small italic">No subcategories.</li>
+                                                {% endif %}
                                             </ul>
                                         </div>
                                     </div>
                                 </div>
                                 {% else %}
-                                <p class="text-muted font-italic">No categories found in the database.</p>
+                                <div class="text-center py-4">
+                                    <p class="text-muted font-italic mb-0">No categories found in the database.</p>
+                                </div>
                                 {% endfor %}
                             </div>
                         </div>
@@ -278,24 +323,39 @@
     </div>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" crossorigin="anonymous"></script>
+<script src="https://code.jquery.com/jquery-3.4.1.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" crossorigin="anonymous"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" crossorigin="anonymous"></script>
 
 <script>
-    document.getElementById('parentSelect').addEventListener('change', function() {
-        var newParentDiv = document.getElementById('newParentDiv');
-        var newParentInput = document.getElementById('newParentInput');
+$(document).ready(function() {
+    // Only the dynamic AJAX drill-down remains
+    $('#category-container').on('change', '.dynamic-category', function() {
+        var $currentSelect = $(this);
+        var selectedValue = $currentSelect.val();
 
-        if (this.value === 'NEW_PARENT') {
-            newParentDiv.style.display = 'block';
-            newParentInput.setAttribute('required', 'required');
-        } else {
-            newParentDiv.style.display = 'none';
-            newParentInput.removeAttribute('required');
-            newParentInput.value = ''; // Clear it out so we don't accidentally send hidden data
+        // Clear sub-dropdowns below this one
+        $currentSelect.nextAll('.dynamic-category').remove();
+
+        // Update the hidden input for Python (default to Root if empty)
+        $('#final_category_input').val(selectedValue || 'Root');
+
+        if (selectedValue && selectedValue !== 'Root') {
+            $.getJSON('/get_subcategories', { parent: selectedValue }, function(data) {
+                if (data.subcategories && data.subcategories.length > 0) {
+                    var $newSelect = $('<select class="form-control form-control-sm dynamic-category mb-2"></select>');
+                    $newSelect.append('<option value="" selected disabled>Select sub-parent...</option>');
+
+                    data.subcategories.forEach(function(child) {
+                        $newSelect.append('<option value="' + child + '">' + child + '</option>');
+                    });
+
+                    $currentSelect.after($newSelect);
+                }
+            });
         }
     });
+});
 </script>
 </body>
 </html>
