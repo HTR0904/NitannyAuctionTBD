@@ -154,25 +154,31 @@
 
                     <div class="form-row align-items-end">
                         <div class="form-group col-md-3">
-                            <label>Category</label>
-                            <select name="category" class="form-control" required>
-                                <option value="" selected disabled>Select category</option>
-                                {% for cat in categories %}
-                                <option value="{{ cat }}">{{ cat }}</option>
+                            <label>Parent Category</label>
+                            <select id="parent_category" class="form-control" required>
+                                <option value="" selected disabled>Select Parent</option>
+                                {% for parent in categories.keys() %}
+                                <option value="{{ parent }}">{{ parent }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="form-group col-md-3">
-                            <label>Hidden Reserve Price ($)</label>
-                            <input type="number" name="reserve_price" step="0.01" min="0" class="form-control" placeholder="e.g. 50.00" required>
+                            <label>Subcategory</label>
+                            <select id="child_category" name="category" class="form-control" required disabled>
+                                <option value="" selected disabled>Select Subcategory</option>
+                            </select>
                         </div>
-                        <div class="form-group col-md-3">
-                            <label>Quantity</label>
+                        <div class="form-group col-md-2">
+                            <label>Reserve ($)</label>
+                            <input type="number" name="reserve_price" step="0.01" min="0" class="form-control" placeholder="50.00" required>
+                        </div>
+                        <div class="form-group col-md-2">
+                            <label>Qty</label>
                             <input type="number" name="quantity" min="1" value="1" class="form-control" required>
                         </div>
-                        <div class="form-group col-md-3">
-                            <label>Max Number of Bids</label>
-                            <input type="number" name="max_bids" min="1" class="form-control" placeholder="e.g. 10" required>
+                        <div class="form-group col-md-2">
+                            <label>Max Bids</label>
+                            <input type="number" name="max_bids" min="1" class="form-control" placeholder="10" required>
                         </div>
                     </div>
 
@@ -311,5 +317,33 @@
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"
         integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6"
         crossorigin="anonymous"></script>
+
+<script>
+    $(document).ready(function() {
+        // Flask uses the 'tojson' filter to pass dictionary into JavaScript
+        var categoryMap = {{ categories | tojson | safe }};
+
+        $('#parent_category').change(function() {
+            var parent = $(this).val();
+            var $childSelect = $('#child_category');
+
+            // Clear current subcategories and set default disabled option
+            $childSelect.empty();
+            $childSelect.append('<option value="" selected disabled>Select Subcategory</option>');
+
+            // If the selected parent exists in the dictionary, populate the children options
+            if (parent && categoryMap[parent]) {
+                categoryMap[parent].forEach(function(child) {
+                    $childSelect.append('<option value="' + child + '">' + child + '</option>');
+                });
+                // Unlock the subcategory dropdown
+                $childSelect.prop('disabled', false);
+            } else {
+                // Keep it locked if nothing valid is selected
+                $childSelect.prop('disabled', true);
+            }
+        });
+    });
+</script>
 </body>
 </html>

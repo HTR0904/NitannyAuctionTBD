@@ -577,6 +577,8 @@ def place_bid():
 def submit_rating():
     #TODO: implement
     return redirect(url_for('bidder') + '#ratings')
+
+
 @app.route('/seller')
 def seller():
     if 'user_email' not in session or session.get('account_type') != '/seller':
@@ -585,21 +587,36 @@ def seller():
     seller_email = session['user_email']
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("SELECT category_name FROM Categories ORDER BY category_name")
-    categories = [row[0] for row in cursor.fetchall()]
+
+    cursor.execute("SELECT parent_category, category_name FROM Categories ORDER BY parent_category, category_name")
+    category_rows = cursor.fetchall()
+
+    grouped_categories = {}
+    for parent, child in category_rows:
+        if parent not in grouped_categories:
+            grouped_categories[parent] = []
+        grouped_categories[parent].append(child)
+
     cursor.execute(
         '''
-        SELECT
-            al.Listing_ID, al.Auction_Title, al.Product_Name, al.Category, al.Reserve_Price,
-            al.Max_bids, al.Status, COUNT(b.Bid_ID) AS bid_count, MAX(b.Bid_Price) AS current_bid
+        SELECT al.Listing_ID,
+               al.Auction_Title,
+               al.Product_Name,
+               al.Category,
+               al.Reserve_Price,
+               al.Max_bids,
+               al.Status,
+               COUNT(b.Bid_ID)  AS bid_count,
+               MAX(b.Bid_Price) AS current_bid
         FROM Auction_Listings al
-        LEFT JOIN Bids b ON al.Listing_ID = b.Listing_ID AND al.Seller_Email = b.Seller_Email
+                 LEFT JOIN Bids b ON al.Listing_ID = b.Listing_ID AND al.Seller_Email = b.Seller_Email
         WHERE al.Seller_Email = ?
         GROUP BY al.Listing_ID
         ORDER BY al.Status DESC, al.Listing_ID DESC
         ''',
         (seller_email,),
     )
+
     my_listings = []
     for row in cursor.fetchall():
         my_listings.append({
@@ -613,10 +630,12 @@ def seller():
             'bid_count': row[7],
             'current_bid': row[8],
         })
+
     conn.close()
+
     return render_template(
         'seller_home.html',
-        categories=categories,
+        categories=grouped_categories,
         my_listings=my_listings,
         current_user=get_app_user(session['user_email']),
     )
