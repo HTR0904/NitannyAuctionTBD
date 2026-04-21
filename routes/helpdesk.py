@@ -1,5 +1,4 @@
 from datetime import datetime
-
 from flask import Blueprint, flash, redirect, render_template, request, send_file, session, url_for
 
 from utils import (
@@ -46,16 +45,28 @@ def submit_ticket():
         helpdesk_req_error=None if created else message,
     )
 
-
 @helpdesk_bp.route("/helpdesk")
 def helpdesk():
     if not helpdesk_only():
         flash("Please log in to continue.", "auth_error")
         return redirect(url_for("index"))
 
+    # Fetch context data from utils
     context = collect_helpdesk_context()
+
+    # Filter/Flag tickets for the Incoming Queue
+    # Tickets assigned to the team email are marked 'is_unassigned' for the template logic
+    if "tickets" in context:
+        for ticket in context["tickets"]:
+            if ticket.get("assigned_email") == DEFAULT_HELPDESK_EMAIL:
+                ticket["is_unassigned"] = True
+            else:
+                # If assigned to a specific person, it is no longer unassigned
+                ticket["is_unassigned"] = False
+
     context["current_user"] = get_app_user(session["user_email"])
     context["default_helpdesk_email"] = DEFAULT_HELPDESK_EMAIL
+
     return render_template("helpdesk_home.html", **context)
 
 

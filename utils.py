@@ -7,7 +7,7 @@ from xml.sax.saxutils import escape
 from flask import session
 
 DB_NAME = "dataset_tables.db"
-DEFAULT_HELPDESK_EMAIL = "helpdesk@lsu.edu"
+DEFAULT_HELPDESK_EMAIL = "helpdeskteam@lsu.edu"
 REQUEST_STATUS = {
     0: "Open",
     1: "In Progress",
@@ -270,8 +270,6 @@ def resolve_full_name(email):
     return email.split("@")[0].replace(".", " ").title()
 
 def ensure_app_user(email, role):
-    # Historical routes call this after login. The real membership tables are the
-    # source of truth now, so this is intentionally non-destructive.
     pass
 
 def get_app_user(email):
@@ -461,15 +459,19 @@ def create_request_ticket(sender_email, request_type, description):
     finally:
         conn.close()
 
+
 def update_request_ticket(ticket_id, staff_email, status_label, assigned_email=None, assign_to_me=False):
     status_value = REQUEST_STATUS_VALUE.get(status_label, 0)
+
     assignment = staff_email if assign_to_me else (assigned_email or staff_email)
+
     conn = get_connection()
     try:
         result = conn.execute(
             """
             UPDATE Requests
-            SET request_status = ?, helpdesk_staff_email = ?
+            SET request_status       = ?,
+                helpdesk_staff_email = ?
             WHERE request_id = ?
               AND (helpdesk_staff_email = ? OR helpdesk_staff_email = ?)
             """,
@@ -478,13 +480,16 @@ def update_request_ticket(ticket_id, staff_email, status_label, assigned_email=N
         conn.commit()
         if result.rowcount:
             return True, f"Ticket #{ticket_id} updated."
-        return False, "Ticket not found, or it is assigned to another helpdesk staff member."
+        return False, "Ticket update failed (it may be assigned to another staff member)."
     finally:
         conn.close()
 
+
 def collect_helpdesk_context():
     conn = get_connection(row_factory=True)
+    staff_email = session.get("user_email")
 
+    # Fetch ALL users for the Directory Table
     users = conn.execute(
         """
         SELECT
@@ -500,8 +505,7 @@ def collect_helpdesk_context():
                 WHEN b.email IS NOT NULL THEN 'bidder'
                 ELSE 'unknown'
             END AS role,
-            'Active' AS user_status,
-            '' AS created_at
+            'Active' AS user_status
         FROM User_Login ul
         LEFT JOIN Bidders b ON b.email = ul.email
         LEFT JOIN Sellers s ON s.email = ul.email
@@ -510,27 +514,7 @@ def collect_helpdesk_context():
         """
     ).fetchall()
 
-    # Fetch ALL Categories
-    raw_categories = conn.execute(
-        "SELECT parent_category, category_name FROM Categories ORDER BY category_name"
-    ).fetchall()
-
-    # Build a Full Tree Map (Parent -> [Children])
-    # This map will contain EVERYTHING, including the 'Root' key.
-    tree_map = {}
-    for row in raw_categories:
-        parent = row["parent_category"]
-        child = row["category_name"]
-
-        if parent not in tree_map:
-            tree_map[parent] = []
-        tree_map[parent].append(child)
-
-    # Identify Top-Level Categories (Direct children of 'Root')
-    # These are the ones that will become the primary Accordion cards.
-    top_categories = tree_map.get('Root', [])
-
-    staff_email = session.get("user_email")
+    # Fetch tickets for the logged-in staff AND the team queue (helpdeskteam@lsu.edu)
     ticket_rows = conn.execute(
         """
         SELECT request_id, sender_email, helpdesk_staff_email, request_type, request_desc, request_status
@@ -540,6 +524,7 @@ def collect_helpdesk_context():
         """,
         (staff_email, DEFAULT_HELPDESK_EMAIL),
     ).fetchall()
+
     tickets = []
     for row in ticket_rows:
         tickets.append({
@@ -551,32 +536,45 @@ def collect_helpdesk_context():
             "subject": row["request_type"],
             "description": row["request_desc"],
             "status": REQUEST_STATUS.get(row["request_status"], "Open"),
-            "status_code": row["request_status"],
-            "priority": "Medium",
-            "created_at": "",
-            "updated_at": "",
+            "status_code": row["request_status"]
         })
-    all_ticket_statuses = conn.execute("SELECT request_status FROM Requests").fetchall()
-    staff_count = conn.execute("SELECT COUNT(*) AS total FROM Helpdesk").fetchone()["total"]
-    category_count = conn.execute("SELECT COUNT(*) AS total FROM Categories").fetchone()["total"]
-    user_count = conn.execute("SELECT COUNT(*) AS total FROM User_Login").fetchone()["total"]
-    conn.close()
 
-    metrics = {
-        "total_users": user_count,
-        "open_tickets": sum(1 for ticket in all_ticket_statuses if ticket["request_status"] != 2),
-        "categories": category_count,
-        "staff_members": staff_count,
-    }
+    # Handle hierarchical Categories
+    raw_categories = conn.execute(
+        "SELECT parent_category, category_name FROM Categories ORDER BY category_name"
+    ).fetchall()
+
+    tree_map = {}
+    for row in raw_categories:
+        parent = row["parent_category"]
+        child = row["category_name"]
+        tree_map.setdefault(parent, []).append(child)
+
+    top_categories = tree_map.get('Root', [])
+
+    # Metrics
+    stats = conn.execute(
+        """
+        SELECT 
+            (SELECT COUNT(*) FROM User_Login) as u_count,
+            (SELECT COUNT(*) FROM Categories) as c_count
+        """
+    ).fetchone()
+
+    conn.close()
 
     return {
         "users": users,
         "tree_map": tree_map,
         "top_categories": top_categories,
         "tickets": tickets,
-        "metrics": metrics
+        "metrics": {
+            "total_users": stats["u_count"],
+            "categories": stats["c_count"]
+        }
     }
 
+# Admin export functions
 def build_export_rows():
     conn = get_connection(row_factory=True)
     rows = conn.execute(
@@ -628,8 +626,6 @@ def build_export_rows():
             }
         )
     return export_rows
-
-# Admin Export functions
 
 def build_csv_bytes(rows):
     buffer = io.StringIO()

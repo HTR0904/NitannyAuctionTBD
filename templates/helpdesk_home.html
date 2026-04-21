@@ -10,22 +10,33 @@
         :root { --navy: #041e42; --navy-soft: #153d72; --cloud: #eef3fb; }
         body { background: linear-gradient(180deg, #f4f7fb, #ffffff); }
         .bg-navy { background-color: var(--navy); }
+        .text-navy { color: var(--navy) !important; }
         .btn-navy { background-color: var(--navy); color: white; border: none; }
         .btn-navy:hover { color: white; background-color: var(--navy-soft); }
+
+        /* New Navy Outline Style */
+        .btn-outline-navy { color: var(--navy); border: 1px solid var(--navy); background-color: transparent; }
+        .btn-outline-navy:hover { background-color: var(--navy); color: white; }
+
         .metric-card, .work-card { background: white; border: 0; border-radius: 20px; box-shadow: 0 18px 42px rgba(4, 30, 66, 0.08); }
         .hero-panel {
             background:
-                radial-gradient(circle at top right, rgba(242, 197, 92, 0.3), transparent 26%),
+                radial-gradient(circle at top right, rgba(242, 197, 92, 0.1), transparent 26%),
                 linear-gradient(135deg, rgba(4, 30, 66, 0.98), rgba(21, 61, 114, 0.95));
             color: white; border-radius: 28px; overflow: hidden;
         }
-        .table-wrap { max-height: 420px; overflow: auto; }
+        .table-wrap { max-height: 400px; overflow: auto; }
         .pill { display: inline-block; border-radius: 999px; padding: 0.25rem 0.75rem; background: var(--cloud); color: var(--navy); font-size: 0.85rem; font-weight: 600; }
-        .form-control, .dynamic-category { min-height: 48px; font-size: 1rem; border-radius: 8px; }
+        .form-control { min-height: 48px; font-size: 1rem; border-radius: 8px; }
+        .ticket-tools .form-control { min-height: 38px; min-width: 140px; font-size: 0.9rem; }
         .navbar .nav-link { color: rgba(255,255,255,0.85) !important; }
         .navbar .nav-link:hover { color: #fff !important; }
         .section-header { border-left: 5px solid var(--navy); padding-left: 15px; margin-bottom: 20px; }
         .nested-tree { border-left: 1px solid #d7e2f2; margin-left: 10px; padding-left: 15px; }
+
+        /* Spacing and Alignment */
+        .work-card table td { vertical-align: middle !important; padding: 1.1rem 0.75rem !important; }
+        .ticket-subject { line-height: 1.4; display: block; margin-bottom: 4px; }
     </style>
 </head>
 <body>
@@ -40,7 +51,8 @@
             <ul class="navbar-nav ml-4">
                 <li class="nav-item"><a class="nav-link" href="#admin-actions">Manage Users</a></li>
                 <li class="nav-item"><a class="nav-link" href="#categories">Categories</a></li>
-                <li class="nav-item"><a class="nav-link" href="#tickets">Tickets</a></li>
+                <li class="nav-item"><a class="nav-link" href="#incoming-tickets">Incoming</a></li>
+                <li class="nav-item"><a class="nav-link" href="#active-tickets">My Tickets</a></li>
             </ul>
         </div>
         <div class="ml-auto d-flex align-items-center text-white">
@@ -67,15 +79,15 @@
     <div class="hero-panel p-5 mb-4">
         <div class="row align-items-center">
             <div class="col-lg-7">
-                <span class="badge badge-warning text-dark px-3 py-2 mb-3">Admin Control Center</span>
+                <span class="badge badge-warning text-navy px-3 py-2 mb-3">Admin Control Center</span>
                 <h1 class="display-4 font-weight-bold">Helpdesk Workspace</h1>
-                <p class="lead mb-0">Manage user accounts, control category hierarchies, and process incoming support tickets.</p>
+                <p class="lead mb-0">Complete oversight of user access, hierarchical categories, and partitioned ticket processing.</p>
             </div>
             <div class="col-lg-5 mt-4 mt-lg-0">
                 <div class="bg-white text-dark rounded p-4">
                     <div class="small text-muted text-uppercase font-weight-bold">Export center</div>
-                    <h4 class="font-weight-bold mt-2">Database-style reporting</h4>
-                    <p class="text-muted">Download the helpdesk dataset as CSV or XLSX.</p>
+                    <h4 class="font-weight-bold mt-2">Data Reporting</h4>
+                    <p class="text-muted">Download full joined helpdesk records.</p>
                     <a href="/helpdesk/export/csv" class="btn btn-outline-dark mr-2">Export CSV</a>
                     <a href="/helpdesk/export/xlsx" class="btn btn-navy">Export XLSX</a>
                 </div>
@@ -83,19 +95,10 @@
         </div>
     </div>
 
-    <div class="row mb-4">
-        <div class="col-md-3 mb-3"><div class="metric-card p-4"><div class="text-muted small text-uppercase">Users</div><div class="display-4 font-weight-bold">{{ metrics["total_users"] }}</div></div></div>
-        <div class="col-md-3 mb-3"><div class="metric-card p-4"><div class="text-muted small text-uppercase">Open Tickets</div><div class="display-4 font-weight-bold">{{ metrics["open_tickets"] }}</div></div></div>
-        <div class="col-md-3 mb-3"><div class="metric-card p-4"><div class="text-muted small text-uppercase">Categories</div><div class="display-4 font-weight-bold">{{ metrics["categories"] }}</div></div></div>
-        <div class="col-md-3 mb-3"><div class="metric-card p-4"><div class="text-muted small text-uppercase">Staff Members</div><div class="display-4 font-weight-bold">{{ metrics["staff_members"] }}</div></div></div>
-    </div>
-
     <div class="work-card p-4 mb-4" id="admin-actions">
         <div class="section-header">
-            <h3 class="font-weight-bold mb-0">Administrative Actions</h3>
-            <p class="text-muted">Create new accounts or modify existing user permissions.</p>
+            <h3 class="font-weight-bold mb-0">Administrative Control</h3>
         </div>
-
         <div class="row">
             <div class="col-lg-7 border-right">
                 <h5 class="font-weight-bold text-navy mb-3">Create New Account</h5>
@@ -103,16 +106,16 @@
                     <div class="form-row">
                         <div class="form-group col-md-6">
                             <label class="small font-weight-bold">Full Name</label>
-                            <input type="text" class="form-control" name="full_name" placeholder="John Doe" required>
+                            <input type="text" class="form-control" name="full_name" required>
                         </div>
                         <div class="form-group col-md-6">
                             <label class="small font-weight-bold">Email Address</label>
-                            <input type="email" class="form-control" name="email" placeholder="user@psu.edu" required>
+                            <input type="email" class="form-control" name="email" required>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group col-md-6">
-                            <label class="small font-weight-bold">Assign Role</label>
+                            <label class="small font-weight-bold">Role</label>
                             <select class="form-control" name="role">
                                 <option value="bidder">Bidder</option>
                                 <option value="seller">Seller</option>
@@ -120,26 +123,25 @@
                             </select>
                         </div>
                         <div class="form-group col-md-6">
-                            <label class="small font-weight-bold">Initial Password</label>
+                            <label class="small font-weight-bold">Password</label>
                             <input type="password" class="form-control" name="password" value="password123" required>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-navy px-4">Create Account</button>
+                    <button type="submit" class="btn btn-navy">Create Account</button>
                 </form>
             </div>
-
             <div class="col-lg-5 pl-lg-4">
-                <h5 class="font-weight-bold text-navy mb-3">Update User</h5>
+                <h5 class="font-weight-bold text-navy mb-3">Modify Existing User</h5>
                 <form action="/helpdesk/update_user" method="POST">
                     <div class="form-group">
-                        <label class="small font-weight-bold">Target User Email</label>
-                        <input type="email" class="form-control" name="user_email" placeholder="email@nittanyauction.com" required>
+                        <label class="small font-weight-bold">Target Email</label>
+                        <input type="email" class="form-control" name="user_email" required>
                     </div>
                     <div class="form-row">
                         <div class="form-group col-md-6">
                             <label class="small font-weight-bold">New Role</label>
                             <select class="form-control" name="role">
-                                <option value="">No Change</option>
+                                <option value="">Keep Current</option>
                                 <option value="bidder">Bidder</option>
                                 <option value="seller">Seller</option>
                                 <option value="helpdesk">Helpdesk</option>
@@ -148,13 +150,13 @@
                         <div class="form-group col-md-6">
                             <label class="small font-weight-bold">Status</label>
                             <select class="form-control" name="user_status">
-                                <option value="">No Change</option>
+                                <option value="">Keep Current</option>
                                 <option>Active</option>
                                 <option>Suspended</option>
                             </select>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-outline-dark px-4">Update User</button>
+                    <button type="submit" class="btn btn-outline-dark">Update User</button>
                 </form>
             </div>
         </div>
@@ -164,7 +166,7 @@
         <div class="col-lg-4 mb-4">
             <div class="work-card p-4 h-100" id="categories">
                 <h3 class="font-weight-bold mb-3">Categories</h3>
-                <form action="/helpdesk/create_category" method="POST" class="mb-4" id="categoryForm">
+                <form action="/helpdesk/create_category" method="POST" class="mb-4">
                     <div class="form-group" id="category-container">
                         <select class="form-control dynamic-category mb-2">
                             <option value="Root" selected>Root (Top Level)</option>
@@ -174,24 +176,16 @@
                         </select>
                         <input type="hidden" name="existing_parent" id="final_category_input" value="Root">
                     </div>
-                    <div class="form-group">
-                        <input type="text" class="form-control" name="child_category" placeholder="New category name" required>
-                    </div>
+                    <input type="text" class="form-control mb-3" name="child_category" placeholder="New category name" required>
                     <button type="submit" class="btn btn-navy btn-block">Add Category</button>
                 </form>
-
-                <div class="table-wrap pr-1">
+                <div class="table-wrap">
                     {% macro render_node(node_name, tree_map, level=1) %}
                         <li class="py-1">
                             <div class="d-flex justify-content-between align-items-center">
-                                <span class="small {% if level > 1 %}text-muted{% endif %}">
-                                    {{ "↳ " if level > 1 else "" }}{{ node_name }}
-                                </span>
+                                <span class="small">{{ "↳ " if level > 1 else "" }}{{ node_name }}</span>
                                 {% if node_name in tree_map %}
-                                    <button class="btn btn-sm btn-link text-navy p-0" type="button" data-toggle="collapse"
-                                            data-target="#nest-{{ node_name|replace(' ', '-') }}">
-                                        <small class="font-weight-bold">+</small>
-                                    </button>
+                                    <button class="btn btn-sm btn-link text-navy p-0" type="button" data-toggle="collapse" data-target="#nest-{{ node_name|replace(' ', '-') }}">+</button>
                                 {% endif %}
                             </div>
                             {% if node_name in tree_map %}
@@ -205,23 +199,16 @@
                             {% endif %}
                         </li>
                     {% endmacro %}
-
-                    <div class="accordion" id="categoryAccordion">
+                    <div class="accordion" id="catAcc">
                         {% for parent in top_categories %}
-                            <div class="card border-0 mb-2 shadow-sm">
-                                <div class="card-header bg-white border-0 py-2" data-toggle="collapse" data-target="#collapse-{{ loop.index }}" style="cursor:pointer">
-                                    <h6 class="mb-0 text-navy small font-weight-bold">{{ parent }}</h6>
+                            <div class="card border-0 mb-1">
+                                <div class="card-header bg-light py-2" data-toggle="collapse" data-target="#c-{{ loop.index }}" style="cursor:pointer">
+                                    <span class="small font-weight-bold">{{ parent }}</span>
                                 </div>
-                                <div id="collapse-{{ loop.index }}" class="collapse" data-parent="#categoryAccordion">
-                                    <div class="card-body bg-light py-2">
+                                <div id="c-{{ loop.index }}" class="collapse">
+                                    <div class="card-body p-2">
                                         <ul class="list-unstyled mb-0">
-                                            {% if parent in tree_map %}
-                                                {% for child in tree_map[parent] %}
-                                                    {{ render_node(child, tree_map) }}
-                                                {% endfor %}
-                                            {% else %}
-                                                <li class="text-muted italic small">No subcategories.</li>
-                                            {% endif %}
+                                            {% if parent in tree_map %}{% for child in tree_map[parent] %}{{ render_node(child, tree_map) }}{% endfor %}{% endif %}
                                         </ul>
                                     </div>
                                 </div>
@@ -232,29 +219,73 @@
             </div>
         </div>
 
-        <div class="col-lg-8 mb-4">
-            <div class="work-card p-4 h-100" id="tickets">
-                <h3 class="font-weight-bold mb-3">Incoming Tickets</h3>
+        <div class="col-lg-8">
+            <div class="work-card p-4 mb-4" id="incoming-tickets">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h3 class="font-weight-bold mb-0">Incoming Requests</h3>
+                </div>
                 <div class="table-wrap">
-                    <table class="table table-hover table-sm">
-                        <thead class="thead-light"><tr><th>Sender</th><th>Subject</th><th>Status</th><th>Action</th></tr></thead>
+                    <table class="table table-hover">
+                        <thead class="thead-light"><tr><th>ID</th><th>Sender</th><th>Subject</th><th>Category</th><th>Action</th></tr></thead>
                         <tbody>
-                        {% for ticket in tickets %}
+                        {% for ticket in tickets if ticket["is_unassigned"] %}
                             <tr>
-                                <td><small>{{ ticket["sender_email"] }}</small></td>
-                                <td><div class="font-weight-bold">{{ ticket["subject"] }}</div><small class="text-muted">{{ ticket["category_name"] }}</small></td>
-                                <td>{{ ticket["status"] }}</td>
+                                <td class="font-weight-bold">#{{ ticket["id"] }}</td>
+                                <td><small class="text-muted">{{ ticket["sender_email"] }}</small></td>
                                 <td>
-                                    <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" class="form-inline">
-                                        <select class="form-control form-control-sm mr-2" name="status">
+                                    <strong class="ticket-subject">{{ ticket["subject"] }}</strong>
+                                    <small class="text-muted d-block">{{ ticket["description"] }}</small>
+                                </td>
+                                <td><span class="pill">{{ ticket["category_name"] }}</span></td>
+                                <td>
+                                    <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" class="d-flex align-items-center flex-wrap ticket-tools">
+                                        <button type="submit" class="btn btn-sm btn-outline-navy mr-2 my-1" name="assign_to_me" value="1">Assign to me</button>
+                                        <select class="form-control form-control-sm mr-2 my-1" name="status">
+                                            <option {% if ticket["status"] == "Open" %}selected{% endif %}>Open</option>
+                                            <option {% if ticket["status"] == "In Progress" %}selected{% endif %}>In Progress</option>
+                                        </select>
+                                        <button type="submit" class="btn btn-sm btn-navy my-1">Save</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="5" class="text-center py-5 text-muted">No new unassigned tickets.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="work-card p-4 mb-4" id="active-tickets">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h3 class="font-weight-bold mb-0">My Tickets</h3>
+                </div>
+                <div class="table-wrap">
+                    <table class="table table-hover">
+                        <thead class="thead-light"><tr><th>ID</th><th>Sender</th><th>Subject</th><th>Category</th><th>Action</th></tr></thead>
+                        <tbody>
+                        {% for ticket in tickets if ticket["assigned_email"] == current_user["email"] %}
+                            <tr>
+                                <td class="font-weight-bold">#{{ ticket["id"] }}</td>
+                                <td><small class="text-muted">{{ ticket["sender_email"] }}</small></td>
+                                <td>
+                                    <strong class="ticket-subject">{{ ticket["subject"] }}</strong>
+                                    <small class="text-muted d-block">{{ ticket["description"] }}</small>
+                                </td>
+                                <td><span class="pill">{{ ticket["category_name"] }}</span></td>
+                                <td>
+                                    <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" class="d-flex align-items-center flex-wrap ticket-tools">
+                                        <select class="form-control form-control-sm mr-2 my-1" name="status">
                                             <option {% if ticket["status"] == "Open" %}selected{% endif %}>Open</option>
                                             <option {% if ticket["status"] == "In Progress" %}selected{% endif %}>In Progress</option>
                                             <option {% if ticket["status"] == "Closed" %}selected{% endif %}>Closed</option>
                                         </select>
-                                        <button type="submit" class="btn btn-sm btn-navy">Save</button>
+                                        <button type="submit" class="btn btn-sm btn-navy my-1">Update</button>
                                     </form>
                                 </td>
                             </tr>
+                        {% else %}
+                            <tr><td colspan="5" class="text-center py-5 text-muted">No active tickets assigned to you.</td></tr>
                         {% endfor %}
                         </tbody>
                     </table>
