@@ -21,13 +21,11 @@
         }
         .table-wrap { max-height: 420px; overflow: auto; }
         .pill { display: inline-block; border-radius: 999px; padding: 0.25rem 0.75rem; background: var(--cloud); color: var(--navy); font-size: 0.85rem; font-weight: 600; }
-        .subpanel { background: #f8fbff; border: 1px solid #d7e2f2; border-radius: 16px; }
-        .form-control, .dynamic-category { min-height: 46px; font-size: 1rem; }
-        textarea.form-control { min-height: 115px; line-height: 1.45; }
-        .ticket-tools { min-width: 360px; }
-        .ticket-tools .form-control { min-width: 145px; }
+        .form-control, .dynamic-category { min-height: 48px; font-size: 1rem; border-radius: 8px; }
         .navbar .nav-link { color: rgba(255,255,255,0.85) !important; }
         .navbar .nav-link:hover { color: #fff !important; }
+        .section-header { border-left: 5px solid var(--navy); padding-left: 15px; margin-bottom: 20px; }
+        .nested-tree { border-left: 1px solid #d7e2f2; margin-left: 10px; padding-left: 15px; }
     </style>
 </head>
 <body>
@@ -40,11 +38,9 @@
         </button>
         <div class="collapse navbar-collapse" id="helpdeskNav">
             <ul class="navbar-nav ml-4">
-                <li class="nav-item"><a class="nav-link" href="#users">Users</a></li>
+                <li class="nav-item"><a class="nav-link" href="#admin-actions">Manage Users</a></li>
                 <li class="nav-item"><a class="nav-link" href="#categories">Categories</a></li>
                 <li class="nav-item"><a class="nav-link" href="#tickets">Tickets</a></li>
-                <li class="nav-item"><a class="nav-link" href="#database-view">Database View</a></li>
-                <li class="nav-item"><a class="nav-link" href="/helpdesk/export/csv">Export CSV</a></li>
             </ul>
         </div>
         <div class="ml-auto d-flex align-items-center text-white">
@@ -58,7 +54,12 @@
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
             {% endfor %}
         {% endif %}
     {% endwith %}
@@ -68,13 +69,13 @@
             <div class="col-lg-7">
                 <span class="badge badge-warning text-dark px-3 py-2 mb-3">Admin Control Center</span>
                 <h1 class="display-4 font-weight-bold">Helpdesk Workspace</h1>
-                <p class="lead mb-0">Receive tickets, manage user accounts, control category setup, and export a pseudo database view for reporting.</p>
+                <p class="lead mb-0">Manage user accounts, control category hierarchies, and process incoming support tickets.</p>
             </div>
             <div class="col-lg-5 mt-4 mt-lg-0">
                 <div class="bg-white text-dark rounded p-4">
                     <div class="small text-muted text-uppercase font-weight-bold">Export center</div>
                     <h4 class="font-weight-bold mt-2">Database-style reporting</h4>
-                    <p class="text-muted">Download the current joined helpdesk dataset as CSV or XLSX for presentation and analysis.</p>
+                    <p class="text-muted">Download the helpdesk dataset as CSV or XLSX.</p>
                     <a href="/helpdesk/export/csv" class="btn btn-outline-dark mr-2">Export CSV</a>
                     <a href="/helpdesk/export/xlsx" class="btn btn-navy">Export XLSX</a>
                 </div>
@@ -89,138 +90,113 @@
         <div class="col-md-3 mb-3"><div class="metric-card p-4"><div class="text-muted small text-uppercase">Staff Members</div><div class="display-4 font-weight-bold">{{ metrics["staff_members"] }}</div></div></div>
     </div>
 
-    <div class="row">
-        <div class="col-lg-6 mb-4">
-            <div class="work-card p-4 h-100" id="users">
-                <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="font-weight-bold mb-0">User Management</h3><span class="pill">Account creation enabled</span></div>
-                <div class="subpanel p-3 mb-4">
-                    <h5 class="font-weight-bold">Create Account</h5>
-                    <form action="/helpdesk/create_account" method="POST">
-                        <div class="form-row">
-                            <div class="form-group col-md-4">
-                                <label>Full name</label>
-                                <input type="text" class="form-control" name="full_name" placeholder="New user name" required>
-                            </div>
-                            <div class="form-group col-md-4">
-                                <label>Email</label>
-                                <input type="email" class="form-control" name="email" placeholder="newuser@psu.edu" required>
-                            </div>
-                            <div class="form-group col-md-2">
-                                <label>Role</label>
-                                <select class="form-control" name="role">
-                                    <option value="bidder">Bidder</option>
-                                    <option value="seller">Seller</option>
-                                    <option value="helpdesk">Helpdesk</option>
-                                </select>
-                            </div>
-                            <div class="form-group col-md-2">
-                                <label>Password</label>
-                                <input type="password" class="form-control" name="password" value="password123" required>
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-navy">Create Account</button>
-                    </form>
-                </div>
+    <div class="work-card p-4 mb-4" id="admin-actions">
+        <div class="section-header">
+            <h3 class="font-weight-bold mb-0">Administrative Actions</h3>
+            <p class="text-muted">Create new accounts or modify existing user permissions.</p>
+        </div>
 
-                <form action="/helpdesk/update_user" method="POST" class="mb-4">
-                    <div class="form-group">
-                        <label>User email</label>
-                        <input type="email" class="form-control" name="user_email" placeholder="seller@nittanyauction.com" required>
+        <div class="row">
+            <div class="col-lg-7 border-right">
+                <h5 class="font-weight-bold text-navy mb-3">Create New Account</h5>
+                <form action="/helpdesk/create_account" method="POST">
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label class="small font-weight-bold">Full Name</label>
+                            <input type="text" class="form-control" name="full_name" placeholder="John Doe" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label class="small font-weight-bold">Email Address</label>
+                            <input type="email" class="form-control" name="email" placeholder="user@psu.edu" required>
+                        </div>
                     </div>
                     <div class="form-row">
-                        <div class="form-group col-md-5">
-                            <label>Full name</label>
-                            <input type="text" class="form-control" name="full_name" placeholder="Optional update">
-                        </div>
-                        <div class="form-group col-md-4">
-                            <label>Role</label>
+                        <div class="form-group col-md-6">
+                            <label class="small font-weight-bold">Assign Role</label>
                             <select class="form-control" name="role">
-                                <option value="">Keep current</option>
+                                <option value="bidder">Bidder</option>
+                                <option value="seller">Seller</option>
+                                <option value="helpdesk">Helpdesk Staff</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label class="small font-weight-bold">Initial Password</label>
+                            <input type="password" class="form-control" name="password" value="password123" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-navy px-4">Create Account</button>
+                </form>
+            </div>
+
+            <div class="col-lg-5 pl-lg-4">
+                <h5 class="font-weight-bold text-navy mb-3">Update User</h5>
+                <form action="/helpdesk/update_user" method="POST">
+                    <div class="form-group">
+                        <label class="small font-weight-bold">Target User Email</label>
+                        <input type="email" class="form-control" name="user_email" placeholder="email@nittanyauction.com" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label class="small font-weight-bold">New Role</label>
+                            <select class="form-control" name="role">
+                                <option value="">No Change</option>
                                 <option value="bidder">Bidder</option>
                                 <option value="seller">Seller</option>
                                 <option value="helpdesk">Helpdesk</option>
                             </select>
                         </div>
-                        <div class="form-group col-md-3">
-                            <label>Status</label>
+                        <div class="form-group col-md-6">
+                            <label class="small font-weight-bold">Status</label>
                             <select class="form-control" name="user_status">
-                                <option value="">Keep current</option>
+                                <option value="">No Change</option>
                                 <option>Active</option>
                                 <option>Suspended</option>
-                                <option>Pending</option>
                             </select>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-navy">Update User</button>
+                    <button type="submit" class="btn btn-outline-dark px-4">Update User</button>
                 </form>
-
-                <div class="table-wrap">
-                    <table class="table table-hover">
-                        <thead class="thead-light"><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
-                        <tbody>
-                        {% for user in users %}
-                            <tr><td>{{ user["full_name"] }}</td><td>{{ user["email"] }}</td><td class="text-capitalize">{{ user["role"] }}</td><td>{{ user["user_status"] }}</td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
             </div>
         </div>
+    </div>
 
-        <div class="col-lg-6 mb-4">
+    <div class="row">
+        <div class="col-lg-4 mb-4">
             <div class="work-card p-4 h-100" id="categories">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h3 class="font-weight-bold mb-0">Category Management</h3>
-                    <span class="pill">Direct admin add</span>
-                </div>
-
+                <h3 class="font-weight-bold mb-3">Categories</h3>
                 <form action="/helpdesk/create_category" method="POST" class="mb-4" id="categoryForm">
                     <div class="form-group" id="category-container">
-                        <label class="font-weight-bold">Select Parent Location</label>
-                        <div id="select-group">
-                            <select class="form-control dynamic-category mb-2">
-                                <option value="Root" selected>Root (Top Level)</option>
-                                {% for cat in top_categories %}
-                                    <option value="{{ cat }}">{{ cat }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
+                        <select class="form-control dynamic-category mb-2">
+                            <option value="Root" selected>Root (Top Level)</option>
+                            {% for cat in top_categories %}
+                                <option value="{{ cat }}">{{ cat }}</option>
+                            {% endfor %}
+                        </select>
                         <input type="hidden" name="existing_parent" id="final_category_input" value="Root">
                     </div>
-
                     <div class="form-group">
-                        <label class="font-weight-bold">New Category Name</label>
-                        <input type="text" class="form-control" name="child_category"
-                               placeholder="e.g., Laptops or Smartphones" required>
-                        <small class="text-muted">This will be created directly inside your selection above.</small>
+                        <input type="text" class="form-control" name="child_category" placeholder="New category name" required>
                     </div>
-
                     <button type="submit" class="btn btn-navy btn-block">Add Category</button>
                 </form>
 
-                <div class="category-tree mt-4">
-                    <h5 class="font-weight-bold mb-3">Current Hierarchy</h5>
-
+                <div class="table-wrap pr-1">
                     {% macro render_node(node_name, tree_map, level=1) %}
                         <li class="py-1">
                             <div class="d-flex justify-content-between align-items-center">
-                                <span class="text-muted">
+                                <span class="small {% if level > 1 %}text-muted{% endif %}">
                                     {{ "↳ " if level > 1 else "" }}{{ node_name }}
                                 </span>
-
                                 {% if node_name in tree_map %}
-                                    <button class="btn btn-sm btn-link text-navy p-0"
-                                            type="button" data-toggle="collapse"
-                                            data-target="#nest-{{ node_name|replace(' ', '-') }}"
-                                            aria-expanded="false">
-                                        <small class="font-weight-bold">+ View Sub-items</small>
+                                    <button class="btn btn-sm btn-link text-navy p-0" type="button" data-toggle="collapse"
+                                            data-target="#nest-{{ node_name|replace(' ', '-') }}">
+                                        <small class="font-weight-bold">+</small>
                                     </button>
                                 {% endif %}
                             </div>
-
                             {% if node_name in tree_map %}
-                                <div class="collapse pl-3 ml-2 border-left" id="nest-{{ node_name|replace(' ', '-') }}">
-                                    <ul class="list-unstyled mb-0 mt-1">
+                                <div class="collapse nested-tree" id="nest-{{ node_name|replace(' ', '-') }}">
+                                    <ul class="list-unstyled mb-0">
                                         {% for sub_child in tree_map[node_name] %}
                                             {{ render_node(sub_child, tree_map, level + 1) }}
                                         {% endfor %}
@@ -230,117 +206,71 @@
                         </li>
                     {% endmacro %}
 
-                    <div class="table-wrap pr-2">
-                        <div class="accordion" id="categoryAccordion">
-                            {% for parent in top_categories %}
-                                <div class="card border-0 mb-2 shadow-sm" style="border-radius: 12px; overflow: hidden;">
-                                    <div class="card-header bg-white border-0 py-3" id="heading-{{ loop.index }}"
-                                         style="cursor: pointer;" data-toggle="collapse"
-                                         data-target="#collapse-{{ loop.index }}" aria-expanded="false">
-
-                                        <h6 class="mb-0 text-navy font-weight-bold d-flex justify-content-between align-items-center">
-                                            <span><span class="text-muted mr-2"></span>{{ parent }}</span>
+                    <div class="accordion" id="categoryAccordion">
+                        {% for parent in top_categories %}
+                            <div class="card border-0 mb-2 shadow-sm">
+                                <div class="card-header bg-white border-0 py-2" data-toggle="collapse" data-target="#collapse-{{ loop.index }}" style="cursor:pointer">
+                                    <h6 class="mb-0 text-navy small font-weight-bold">{{ parent }}</h6>
+                                </div>
+                                <div id="collapse-{{ loop.index }}" class="collapse" data-parent="#categoryAccordion">
+                                    <div class="card-body bg-light py-2">
+                                        <ul class="list-unstyled mb-0">
                                             {% if parent in tree_map %}
-                                                <span class="badge badge-pill badge-light border text-muted" style="font-size: 0.75rem;">
-                                                    {{ tree_map[parent]|length }} subcategories
-                                                </span>
+                                                {% for child in tree_map[parent] %}
+                                                    {{ render_node(child, tree_map) }}
+                                                {% endfor %}
+                                            {% else %}
+                                                <li class="text-muted italic small">No subcategories.</li>
                                             {% endif %}
-                                        </h6>
-                                    </div>
-
-                                    <div id="collapse-{{ loop.index }}" class="collapse" data-parent="#categoryAccordion">
-                                        <div class="card-body bg-light py-2 px-4 border-top">
-                                            <ul class="list-unstyled mb-0">
-                                                {% if parent in tree_map %}
-                                                    {% for child in tree_map[parent] %}
-                                                        {{ render_node(child, tree_map) }}
-                                                    {% endfor %}
-                                                {% else %}
-                                                    <li class="text-muted small italic">No subcategories.</li>
-                                                {% endif %}
-                                            </ul>
-                                        </div>
+                                        </ul>
                                     </div>
                                 </div>
-                                {% else %}
-                                <div class="text-center py-4">
-                                    <p class="text-muted font-italic mb-0">No categories found in the database.</p>
-                                </div>
-                                {% endfor %}
                             </div>
-                        </div>
+                        {% endfor %}
                     </div>
                 </div>
-            </div> </div> <div class="work-card p-4 mb-4" id="tickets">
-        <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="font-weight-bold mb-0">Incoming Helpdesk Tickets</h3><span class="pill">User requests intake</span></div>
-        <div class="table-wrap">
-            <table class="table table-hover">
-                <thead class="thead-light"><tr><th>ID</th><th>Sender</th><th>Subject</th><th>Category</th><th>Status</th><th>Priority</th><th>Assignment</th></tr></thead>
-                <tbody>
-                {% for ticket in tickets %}
-                    <tr>
-                        <td>#{{ ticket["id"] }}</td>
-                        <td>{{ ticket["sender_email"] }}</td>
-                        <td><strong>{{ ticket["subject"] }}</strong><br><small class="text-muted">{{ ticket["description"] }}</small></td>
-                        <td>{{ ticket["category_name"] }}</td>
-                        <td>{{ ticket["status"] }}</td>
-                        <td>{{ ticket["priority"] }}</td>
-                        <td>
-                            <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" class="form-inline ticket-tools">
-                                <input type="email" class="form-control mr-2 mb-2" name="assigned_email" value="{{ ticket['assigned_email'] }}" placeholder="Staff email">
-                                {% if ticket["is_unassigned"] %}
-                                    <button type="submit" class="btn btn-sm btn-outline-primary mr-2 mb-2" name="assign_to_me" value="1">Assign to me</button>
-                                    <span class="badge badge-warning text-dark mr-2 mb-2">Unassigned</span>
-                                {% else %}
-                                    <span class="badge badge-info mr-2 mb-2">Assigned</span>
-                                {% endif %}
-                                <select class="form-control mr-2 mb-2" name="status">
-                                    <option {% if ticket["status"] == "Open" %}selected{% endif %}>Open</option>
-                                    <option {% if ticket["status"] == "In Progress" %}selected{% endif %}>In Progress</option>
-                                    <option {% if ticket["status"] == "Closed" %}selected{% endif %}>Closed</option>
-                                </select>
-                                <select class="form-control mr-2 mb-2" name="priority">
-                                    <option {% if ticket["priority"] == "Low" %}selected{% endif %}>Low</option>
-                                    <option {% if ticket["priority"] == "Medium" %}selected{% endif %}>Medium</option>
-                                    <option {% if ticket["priority"] == "High" %}selected{% endif %}>High</option>
-                                </select>
-                                <button type="submit" class="btn btn-sm btn-navy mb-2">Save</button>
-                            </form>
-                        </td>
-                    </tr>
-                {% else %}
-                    <tr><td colspan="7" class="text-center text-muted py-4">No tickets yet. New user requests will appear here.</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
+            </div>
+        </div>
+
+        <div class="col-lg-8 mb-4">
+            <div class="work-card p-4 h-100" id="tickets">
+                <h3 class="font-weight-bold mb-3">Incoming Tickets</h3>
+                <div class="table-wrap">
+                    <table class="table table-hover table-sm">
+                        <thead class="thead-light"><tr><th>Sender</th><th>Subject</th><th>Status</th><th>Action</th></tr></thead>
+                        <tbody>
+                        {% for ticket in tickets %}
+                            <tr>
+                                <td><small>{{ ticket["sender_email"] }}</small></td>
+                                <td><div class="font-weight-bold">{{ ticket["subject"] }}</div><small class="text-muted">{{ ticket["category_name"] }}</small></td>
+                                <td>{{ ticket["status"] }}</td>
+                                <td>
+                                    <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" class="form-inline">
+                                        <select class="form-control form-control-sm mr-2" name="status">
+                                            <option {% if ticket["status"] == "Open" %}selected{% endif %}>Open</option>
+                                            <option {% if ticket["status"] == "In Progress" %}selected{% endif %}>In Progress</option>
+                                            <option {% if ticket["status"] == "Closed" %}selected{% endif %}>Closed</option>
+                                        </select>
+                                        <button type="submit" class="btn btn-sm btn-navy">Save</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="work-card p-4" id="database-view">
-        <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="font-weight-bold mb-0">Pseudo Database View</h3><span class="pill">Joined records for export</span></div>
+    <div class="work-card p-4" id="user-directory">
+        <h3 class="font-weight-bold mb-3">User Directory</h3>
         <div class="table-wrap">
-            <table class="table table-bordered table-sm">
-                <thead class="thead-light"><tr><th>Ticket ID</th><th>Sender</th><th>Role</th><th>Category</th><th>Status</th><th>Priority</th><th>Assigned Staff</th><th>Updated</th></tr></thead>
+            <table class="table table-hover">
+                <thead class="thead-light"><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
                 <tbody>
-                {% for ticket in tickets %}
-                    <tr>
-                        <td>{{ ticket["id"] }}</td>
-                        <td>{{ ticket["sender_email"] }}</td>
-                        <td>
-                            {% for user in users if user["email"] == ticket["sender_email"] %}
-                                {{ user["role"]|capitalize }}
-                            {% else %}
-                                Unknown
-                            {% endfor %}
-                        </td>
-                        <td>{{ ticket["category_name"] }}</td>
-                        <td>{{ ticket["status"] }}</td>
-                        <td>{{ ticket["priority"] }}</td>
-                        <td>{{ ticket["assigned_email"] }}</td>
-                        <td>{{ ticket["updated_at"] }}</td>
-                    </tr>
-                {% else %}
-                    <tr><td colspan="8" class="text-center text-muted py-4">No records available for export yet.</td></tr>
+                {% for user in users %}
+                    <tr><td>{{ user["full_name"] }}</td><td>{{ user["email"] }}</td><td class="text-capitalize">{{ user["role"] }}</td><td>{{ user["user_status"] }}</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
@@ -348,33 +278,24 @@
     </div>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.4.1.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" crossorigin="anonymous"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" crossorigin="anonymous"></script>
-
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
 <script>
 $(document).ready(function() {
-    // Only the dynamic AJAX drill-down remains
     $('#category-container').on('change', '.dynamic-category', function() {
         var $currentSelect = $(this);
         var selectedValue = $currentSelect.val();
-
-        // Clear sub-dropdowns below this one
         $currentSelect.nextAll('.dynamic-category').remove();
-
-        // Update the hidden input for Python (default to Root if empty)
         $('#final_category_input').val(selectedValue || 'Root');
-
         if (selectedValue && selectedValue !== 'Root') {
             $.getJSON('/get_subcategories', { parent: selectedValue }, function(data) {
                 if (data.subcategories && data.subcategories.length > 0) {
                     var $newSelect = $('<select class="form-control dynamic-category mb-2"></select>');
                     $newSelect.append('<option value="" selected disabled>Select sub-parent...</option>');
-
                     data.subcategories.forEach(function(child) {
                         $newSelect.append('<option value="' + child + '">' + child + '</option>');
                     });
-
                     $currentSelect.after($newSelect);
                 }
             });

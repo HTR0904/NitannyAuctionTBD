@@ -22,7 +22,6 @@ init_db()
 
 @app.route('/')
 def index():
-    ensure_admin_schema()
     if 'user_email' in session and 'account_type' in session:
         return redirect(session['account_type'])
     return render_template('login.html')
@@ -1152,5 +1151,4 @@ def chat_delete(thread_id):
 
 
 if __name__ == '__main__':
-    ensure_admin_schema()
     app.run(debug=True)  #enabled to run with TEMPLATES_AUTO_RELOAD

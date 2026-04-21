@@ -251,25 +251,6 @@ def get_connection(row_factory=False):
         conn.row_factory = sql.Row
     return conn
 
-def ensure_admin_schema():
-    """Ensure only small compatibility records required by the real schema exist."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT OR IGNORE INTO User_Login (email, password_hash) VALUES (?, ?)",
-        (DEFAULT_HELPDESK_EMAIL, hash_password("password123")),
-    )
-    cursor.execute(
-        "INSERT OR IGNORE INTO Helpdesk (email, Position) VALUES (?, ?)",
-        (DEFAULT_HELPDESK_EMAIL, "Default Queue"),
-    )
-    cursor.execute(
-        "INSERT OR IGNORE INTO Categories (category_name, parent_category) VALUES (?, ?)",
-        ("Helpdesk", "Root"),
-    )
-    conn.commit()
-    conn.close()
-
 def resolve_full_name(email):
     conn = get_connection()
     cursor = conn.cursor()
@@ -291,10 +272,9 @@ def resolve_full_name(email):
 def ensure_app_user(email, role):
     # Historical routes call this after login. The real membership tables are the
     # source of truth now, so this is intentionally non-destructive.
-    ensure_admin_schema()
+    pass
 
 def get_app_user(email):
-    ensure_admin_schema()
     conn = get_connection(row_factory=True)
     user = conn.execute(
         """
@@ -325,7 +305,6 @@ def get_app_user(email):
     return user
 
 def authenticate_app_user(email, password, role):
-    ensure_admin_schema()
     conn = get_connection(row_factory=True)
     row = conn.execute("SELECT password_hash FROM User_Login WHERE email = ?", (email,)).fetchone()
     if not row or row["password_hash"] != hash_password(password):
@@ -350,7 +329,6 @@ def create_helpdesk_account(full_name, email, password, role):
     if role not in ("bidder", "seller", "helpdesk"):
         return False, "Please choose a valid account role."
 
-    ensure_admin_schema()
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -389,7 +367,6 @@ def update_real_user(email, full_name, role):
     if not email:
         return False, "Please select a user email to update."
 
-    ensure_admin_schema()
     conn = get_connection()
     cursor = conn.cursor()
     exists = cursor.execute("SELECT 1 FROM User_Login WHERE email = ?", (email,)).fetchone()
@@ -506,7 +483,6 @@ def update_request_ticket(ticket_id, staff_email, status_label, assigned_email=N
         conn.close()
 
 def collect_helpdesk_context():
-    ensure_admin_schema()
     conn = get_connection(row_factory=True)
 
     users = conn.execute(
@@ -602,7 +578,6 @@ def collect_helpdesk_context():
     }
 
 def build_export_rows():
-    ensure_admin_schema()
     conn = get_connection(row_factory=True)
     rows = conn.execute(
         """

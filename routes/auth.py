@@ -9,7 +9,6 @@ def logout():
 
 @auth_bp.route('/login_bidder', methods=['POST'])
 def login_bidder():
-    ensure_admin_schema()
     username = request.form.get('bidder_email')
     password = request.form.get('bidder_password')
 
@@ -43,7 +42,6 @@ def login_bidder():
 
 @auth_bp.route('/login_seller', methods=['POST'])
 def login_seller():
-    ensure_admin_schema()
     seller_username = request.form.get('seller_email')
     seller_password = request.form.get('seller_password')
 
@@ -78,7 +76,6 @@ def login_seller():
 
 @auth_bp.route('/login_helpdesk', methods=['POST'])
 def login_helpdesk():
-    ensure_admin_schema()
     helpdesk_username = request.form.get('helpdesk_email')
     helpdesk_password = request.form.get('helpdesk_password')
 
@@ -112,7 +109,6 @@ def login_helpdesk():
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
-    ensure_admin_schema()
     if request.method == 'GET':
         return render_template('register.html')
 
