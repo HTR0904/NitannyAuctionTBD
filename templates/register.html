@@ -85,7 +85,7 @@
                 </div>
                 {% endif %}
 
-                <form action="/register" method="POST" id="registerForm">
+                <form action="{{url_for('auth.register')}}" method="POST" id="registerForm">
                     <div class="section-title">Account Type</div>
                     <div class="row mb-4">
                         <div class="col-6 mb-3 mb-md-0">

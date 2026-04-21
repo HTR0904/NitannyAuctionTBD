@@ -51,13 +51,13 @@
         </h2>
 
         {% if unread_count %}
-        <form action="/notifications/mark_all_read" method="POST" class="d-inline">
+        <form action="{{ url_for('notif.mark_all_read') }}" method="POST" class="d-inline">
             <button type="submit" class="btn btn-outline-dark btn-sm">Mark All as Read</button>
         </form>
         {% endif %}
 
         {% if notifications %}
-        <form action="/notifications/delete_all" method="POST" class="d-inline ml-2"
+        <form action="{{ url_for('notif.delete_all') }}" method="POST" class="d-inline ml-2"
               onsubmit="return confirm('Delete all notifications? This cannot be undone.');">
             <button type="submit" class="btn btn-outline-danger btn-sm">Clear All</button>
         </form>
@@ -83,13 +83,13 @@
                 </div>
                 <div class="ml-3 d-flex flex-column">
                     {% if not notif.is_read %}
-                    <form action="/notifications/mark_read/{{ notif.id }}" method="POST" class="mb-1">
+                    <form action="{{ url_for('notif.mark_read', notif_id=notif.id) }}" method="POST" class="mb-1">
                         <button type="submit" class="btn btn-sm btn-outline-secondary" title="Mark as read">
                             ✓
                         </button>
                     </form>
                     {% endif %}
-                    <form action="/notifications/delete/{{ notif.id }}" method="POST"
+                    <form action="{{ url_for('notif.delete', notif_id=notif.id) }}" method="POST"
                           onsubmit="return confirm('Delete this notification?');">
                         <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
                             🗑
