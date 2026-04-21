@@ -31,13 +31,7 @@
 </head>
 <body class="bg-light">
 
-<nav class="navbar navbar-dark bg-navy">
-    <div class="container">
-        <a class="navbar-brand font-weight-bold"
-           href="/{{ 'seller' if account_type == '/seller' else 'bidder' }}">← Back to Dashboard</a>
-        <span class="navbar-text text-light">Signed in as: {{ user_email }}</span>
-    </div>
-</nav>
+{% include 'components/navbar.html' %}
 
 <div class="container mt-4">
     <h2 class="text-navy font-weight-bold mb-4">Browse Listings</h2>

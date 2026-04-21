@@ -13,12 +13,16 @@
 
         <div class="collapse navbar-collapse" id="navbarContent">
 
-            {# SHARED SEARCH BAR #}
-            <form class="form-inline mx-auto my-2 my-lg-0" action="/search" method="GET">
-                <input class="form-control mr-sm-2" type="search" name="q" placeholder="Search" aria-label="Search" style="width: 350px">
-                <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Search</button>
-            </form>
-
+            {# CONDITIONAL SEARCH BAR #}
+            {% if request.endpoint != 'search' %}
+                <form class="form-inline mx-auto my-2 my-lg-0" action="/search" method="GET">
+                    <input class="form-control mr-sm-2" type="search" name="q" placeholder="Search" aria-label="Search" style="width: 350px">
+                    <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Search</button>
+                </form>
+            {% else %}
+                {# Invisible spacer to keep the layout intact #}
+                <div class="mx-auto"></div>
+            {% endif %}
             <ul class="navbar-nav align-items-center">
 
                 {# MAIN LINKS #}
