@@ -388,9 +388,13 @@ def auction_detail(listing_id):
 
     db.close()
 
-    #TODO: add watchlist
-
-    is_watching = False # Temp
+    cur.execute("""
+                SELECT 1
+                FROM Watchlist
+                WHERE Bidder_Email = ?
+                  AND Listing_ID = ?
+                """, (me, listing_id))
+    is_watching = bool(cur.fetchone())
 
     return render_template(
         'auction_detail.html',
