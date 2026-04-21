@@ -22,12 +22,31 @@
         .table-wrap { max-height: 420px; overflow: auto; }
         .pill { display: inline-block; border-radius: 999px; padding: 0.25rem 0.75rem; background: var(--cloud); color: var(--navy); font-size: 0.85rem; font-weight: 600; }
         .subpanel { background: #f8fbff; border: 1px solid #d7e2f2; border-radius: 16px; }
+        .form-control, .dynamic-category { min-height: 46px; font-size: 1rem; }
+        textarea.form-control { min-height: 115px; line-height: 1.45; }
+        .ticket-tools { min-width: 360px; }
+        .ticket-tools .form-control { min-width: 145px; }
+        .navbar .nav-link { color: rgba(255,255,255,0.85) !important; }
+        .navbar .nav-link:hover { color: #fff !important; }
     </style>
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-navy">
     <div class="container">
         <a class="navbar-brand font-weight-bold" href="/helpdesk">Nittany Auction</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#helpdeskNav"
+                aria-controls="helpdeskNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="helpdeskNav">
+            <ul class="navbar-nav ml-4">
+                <li class="nav-item"><a class="nav-link" href="#users">Users</a></li>
+                <li class="nav-item"><a class="nav-link" href="#categories">Categories</a></li>
+                <li class="nav-item"><a class="nav-link" href="#tickets">Tickets</a></li>
+                <li class="nav-item"><a class="nav-link" href="#database-view">Database View</a></li>
+                <li class="nav-item"><a class="nav-link" href="/helpdesk/export/csv">Export CSV</a></li>
+            </ul>
+        </div>
         <div class="ml-auto d-flex align-items-center text-white">
             <span class="mr-3">{{ current_user["full_name"] }}</span>
             <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-light btn-sm">Logout</a>
@@ -72,7 +91,7 @@
 
     <div class="row">
         <div class="col-lg-6 mb-4">
-            <div class="work-card p-4 h-100">
+            <div class="work-card p-4 h-100" id="users">
                 <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="font-weight-bold mb-0">User Management</h3><span class="pill">Account creation enabled</span></div>
                 <div class="subpanel p-3 mb-4">
                     <h5 class="font-weight-bold">Create Account</h5>
@@ -149,7 +168,7 @@
         </div>
 
         <div class="col-lg-6 mb-4">
-            <div class="work-card p-4 h-100">
+            <div class="work-card p-4 h-100" id="categories">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h3 class="font-weight-bold mb-0">Category Management</h3>
                     <span class="pill">Direct admin add</span>
@@ -159,7 +178,7 @@
                     <div class="form-group" id="category-container">
                         <label class="font-weight-bold">Select Parent Location</label>
                         <div id="select-group">
-                            <select class="form-control form-control-sm dynamic-category mb-2">
+                            <select class="form-control dynamic-category mb-2">
                                 <option value="Root" selected>Root (Top Level)</option>
                                 {% for cat in top_categories %}
                                     <option value="{{ cat }}">{{ cat }}</option>
@@ -252,7 +271,7 @@
                         </div>
                     </div>
                 </div>
-            </div> </div> <div class="work-card p-4 mb-4">
+            </div> </div> <div class="work-card p-4 mb-4" id="tickets">
         <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="font-weight-bold mb-0">Incoming Helpdesk Tickets</h3><span class="pill">User requests intake</span></div>
         <div class="table-wrap">
             <table class="table table-hover">
@@ -267,14 +286,20 @@
                         <td>{{ ticket["status"] }}</td>
                         <td>{{ ticket["priority"] }}</td>
                         <td>
-                            <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" class="form-inline">
-                                <input type="email" class="form-control form-control-sm mr-2 mb-2" name="assigned_email" value="{{ ticket['assigned_email'] }}" placeholder="Staff email">
-                                <select class="form-control form-control-sm mr-2 mb-2" name="status">
+                            <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" class="form-inline ticket-tools">
+                                <input type="email" class="form-control mr-2 mb-2" name="assigned_email" value="{{ ticket['assigned_email'] }}" placeholder="Staff email">
+                                {% if ticket["is_unassigned"] %}
+                                    <button type="submit" class="btn btn-sm btn-outline-primary mr-2 mb-2" name="assign_to_me" value="1">Assign to me</button>
+                                    <span class="badge badge-warning text-dark mr-2 mb-2">Unassigned</span>
+                                {% else %}
+                                    <span class="badge badge-info mr-2 mb-2">Assigned</span>
+                                {% endif %}
+                                <select class="form-control mr-2 mb-2" name="status">
                                     <option {% if ticket["status"] == "Open" %}selected{% endif %}>Open</option>
                                     <option {% if ticket["status"] == "In Progress" %}selected{% endif %}>In Progress</option>
                                     <option {% if ticket["status"] == "Closed" %}selected{% endif %}>Closed</option>
                                 </select>
-                                <select class="form-control form-control-sm mr-2 mb-2" name="priority">
+                                <select class="form-control mr-2 mb-2" name="priority">
                                     <option {% if ticket["priority"] == "Low" %}selected{% endif %}>Low</option>
                                     <option {% if ticket["priority"] == "Medium" %}selected{% endif %}>Medium</option>
                                     <option {% if ticket["priority"] == "High" %}selected{% endif %}>High</option>
@@ -291,7 +316,7 @@
         </div>
     </div>
 
-    <div class="work-card p-4">
+    <div class="work-card p-4" id="database-view">
         <div class="d-flex justify-content-between align-items-center mb-3"><h3 class="font-weight-bold mb-0">Pseudo Database View</h3><span class="pill">Joined records for export</span></div>
         <div class="table-wrap">
             <table class="table table-bordered table-sm">
@@ -343,7 +368,7 @@ $(document).ready(function() {
         if (selectedValue && selectedValue !== 'Root') {
             $.getJSON('/get_subcategories', { parent: selectedValue }, function(data) {
                 if (data.subcategories && data.subcategories.length > 0) {
-                    var $newSelect = $('<select class="form-control form-control-sm dynamic-category mb-2"></select>');
+                    var $newSelect = $('<select class="form-control dynamic-category mb-2"></select>');
                     $newSelect.append('<option value="" selected disabled>Select sub-parent...</option>');
 
                     data.subcategories.forEach(function(child) {

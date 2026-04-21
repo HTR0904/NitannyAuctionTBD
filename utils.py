@@ -4,13 +4,16 @@ import zipfile
 import io
 import csv
 from xml.sax.saxutils import escape
-from datetime import datetime
 from flask import session
 
 DB_NAME = "dataset_tables.db"
-USERS_TABLE = "app_users"
-CATEGORIES_TABLE = "app_categories"
-TICKETS_TABLE = "app_helpdesk_tickets"
+DEFAULT_HELPDESK_EMAIL = "helpdesk@lsu.edu"
+REQUEST_STATUS = {
+    0: "Open",
+    1: "In Progress",
+    2: "Closed",
+}
+REQUEST_STATUS_VALUE = {label: value for value, label in REQUEST_STATUS.items()}
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -249,72 +252,21 @@ def get_connection(row_factory=False):
     return conn
 
 def ensure_admin_schema():
+    """Ensure only small compatibility records required by the real schema exist."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.executescript(
-        f"""
-        CREATE TABLE IF NOT EXISTS {USERS_TABLE} (
-            email TEXT PRIMARY KEY,
-            full_name TEXT NOT NULL,
-            password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK(role IN ('bidder', 'seller', 'helpdesk')),
-            user_status TEXT NOT NULL DEFAULT 'Active',
-            created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS {CATEGORIES_TABLE} (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            description TEXT NOT NULL,
-            created_by TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS {TICKETS_TABLE} (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sender_email TEXT NOT NULL,
-            assigned_email TEXT NOT NULL,
-            category_name TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            description TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'Open',
-            priority TEXT NOT NULL DEFAULT 'Medium',
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-        """
+    cursor.execute(
+        "INSERT OR IGNORE INTO User_Login (email, password_hash) VALUES (?, ?)",
+        (DEFAULT_HELPDESK_EMAIL, hash_password("password123")),
     )
-
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    seed_users = [
-        ("bidder@nittanyauction.com", "Campus Bidder", hash_password("password123"), "bidder"),
-        ("seller@nittanyauction.com", "Campus Seller", hash_password("password123"), "seller"),
-        ("helpdesk@nittanyauction.com", "Helpdesk Admin", hash_password("password123"), "helpdesk"),
-    ]
-    for email, full_name, password_hash, role in seed_users:
-        cursor.execute(
-            f"""
-            INSERT OR IGNORE INTO {USERS_TABLE} (email, full_name, password_hash, role, created_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (email, full_name, password_hash, role, now),
-        )
-
-    seed_categories = [
-        ("Electronics", "Devices, gadgets, and peripherals."),
-        ("Books", "Textbooks, novels, and study materials."),
-        ("Furniture", "Dorm and apartment furniture."),
-        ("Helpdesk", "Account, listing, and system support requests."),
-    ]
-    for name, description in seed_categories:
-        cursor.execute(
-            f"""
-            INSERT OR IGNORE INTO {CATEGORIES_TABLE} (name, description, created_by, created_at)
-            VALUES (?, ?, ?, ?)
-            """,
-            (name, description, "helpdesk@nittanyauction.com", now),
-        )
-
+    cursor.execute(
+        "INSERT OR IGNORE INTO Helpdesk (email, Position) VALUES (?, ?)",
+        (DEFAULT_HELPDESK_EMAIL, "Default Queue"),
+    )
+    cursor.execute(
+        "INSERT OR IGNORE INTO Categories (category_name, parent_category) VALUES (?, ?)",
+        ("Helpdesk", "Root"),
+    )
     conn.commit()
     conn.close()
 
@@ -337,63 +289,219 @@ def resolve_full_name(email):
     return email.split("@")[0].replace(".", " ").title()
 
 def ensure_app_user(email, role):
+    # Historical routes call this after login. The real membership tables are the
+    # source of truth now, so this is intentionally non-destructive.
     ensure_admin_schema()
-    conn = get_connection(row_factory=True)
-    cursor = conn.cursor()
-    try:
-        password_row = cursor.execute(
-            "SELECT password_hash FROM User_Login WHERE email = ?",
-            (email,),
-        ).fetchone()
-        password_hash = password_row["password_hash"] if password_row else hash_password("password123")
-        cursor.execute(
-            f"""
-            INSERT OR IGNORE INTO {USERS_TABLE} (email, full_name, password_hash, role, created_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                email,
-                resolve_full_name(email),
-                password_hash,
-                role,
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            ),
-        )
-        cursor.execute(f"UPDATE {USERS_TABLE} SET role = ? WHERE email = ?", (role, email))
-        conn.commit()
-    finally:
-        conn.close()
 
 def get_app_user(email):
     ensure_admin_schema()
     conn = get_connection(row_factory=True)
-    user = conn.execute(f"SELECT * FROM {USERS_TABLE} WHERE email = ?", (email,)).fetchone()
+    user = conn.execute(
+        """
+        SELECT
+            ul.email,
+            COALESCE(
+                NULLIF(TRIM(COALESCE(b.first_name, '') || ' ' || COALESCE(b.last_name, '')), ''),
+                h.Position,
+                ul.email
+            ) AS full_name,
+            CASE
+                WHEN h.email IS NOT NULL THEN 'helpdesk'
+                WHEN s.email IS NOT NULL THEN 'seller'
+                WHEN b.email IS NOT NULL THEN 'bidder'
+                ELSE 'unknown'
+            END AS role,
+            'Active' AS user_status,
+            '' AS created_at
+        FROM User_Login ul
+        LEFT JOIN Bidders b ON b.email = ul.email
+        LEFT JOIN Sellers s ON s.email = ul.email
+        LEFT JOIN Helpdesk h ON h.email = ul.email
+        WHERE ul.email = ?
+        """,
+        (email,),
+    ).fetchone()
     conn.close()
     return user
 
 def authenticate_app_user(email, password, role):
-    user = get_app_user(email)
-    return bool(user and user["password_hash"] == hash_password(password) and user["role"] == role)
+    ensure_admin_schema()
+    conn = get_connection(row_factory=True)
+    row = conn.execute("SELECT password_hash FROM User_Login WHERE email = ?", (email,)).fetchone()
+    if not row or row["password_hash"] != hash_password(password):
+        conn.close()
+        return False
+    membership_table = {"bidder": "Bidders", "seller": "Sellers", "helpdesk": "Helpdesk"}.get(role)
+    member = conn.execute(f"SELECT 1 FROM {membership_table} WHERE email = ?", (email,)).fetchone()
+    conn.close()
+    return bool(member)
+
+def split_full_name(full_name):
+    parts = full_name.strip().split()
+    if not parts:
+        return "", ""
+    if len(parts) == 1:
+        return parts[0], ""
+    return parts[0], " ".join(parts[1:])
 
 def create_helpdesk_account(full_name, email, password, role):
     if not all([full_name, email, password, role]):
         return False, "Please complete all account creation fields."
+    if role not in ("bidder", "seller", "helpdesk"):
+        return False, "Please choose a valid account role."
 
     ensure_admin_schema()
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute(
-            f"""
-            INSERT INTO {USERS_TABLE} (email, full_name, password_hash, role, created_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (email, full_name, hash_password(password), role, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-        )
+        cursor.execute("INSERT INTO User_Login (email, password_hash) VALUES (?, ?)", (email, hash_password(password)))
+        first_name, last_name = split_full_name(full_name)
+        if role in ("bidder", "seller"):
+            cursor.execute(
+                """
+                INSERT INTO Bidders (email, first_name, last_name, age, home_address_id, major)
+                VALUES (?, ?, ?, NULL, NULL, NULL)
+                """,
+                (email, first_name, last_name),
+            )
+        if role == "seller":
+            cursor.execute(
+                """
+                INSERT INTO Sellers (email, bank_routing_number, bank_account_number, balance)
+                VALUES (?, ?, ?, 0)
+                """,
+                (email, "", 0),
+            )
+        if role == "helpdesk":
+            cursor.execute(
+                "INSERT INTO Helpdesk (email, Position) VALUES (?, ?)",
+                (email, "Helpdesk Staff"),
+            )
         conn.commit()
         return True, "Account created successfully."
     except sql.IntegrityError:
+        conn.rollback()
         return False, "An account with that email already exists."
+    finally:
+        conn.close()
+
+def update_real_user(email, full_name, role):
+    if not email:
+        return False, "Please select a user email to update."
+
+    ensure_admin_schema()
+    conn = get_connection()
+    cursor = conn.cursor()
+    exists = cursor.execute("SELECT 1 FROM User_Login WHERE email = ?", (email,)).fetchone()
+    if not exists:
+        conn.close()
+        return False, "No matching user account was found."
+
+    try:
+        if full_name:
+            first_name, last_name = split_full_name(full_name)
+            if cursor.execute("SELECT 1 FROM Bidders WHERE email = ?", (email,)).fetchone():
+                cursor.execute(
+                    "UPDATE Bidders SET first_name = ?, last_name = ? WHERE email = ?",
+                    (first_name, last_name, email),
+                )
+            elif cursor.execute("SELECT 1 FROM Helpdesk WHERE email = ?", (email,)).fetchone():
+                cursor.execute("UPDATE Helpdesk SET Position = ? WHERE email = ?", (full_name, email))
+
+        if role:
+            if role not in ("bidder", "seller", "helpdesk"):
+                return False, "Please choose a valid account role."
+            first_name, last_name = split_full_name(full_name or resolve_full_name(email))
+            if role in ("bidder", "seller"):
+                cursor.execute("DELETE FROM Helpdesk WHERE email = ?", (email,))
+                cursor.execute(
+                    """
+                    INSERT OR IGNORE INTO Bidders (email, first_name, last_name, age, home_address_id, major)
+                    VALUES (?, ?, ?, NULL, NULL, NULL)
+                    """,
+                    (email, first_name, last_name),
+                )
+            if role == "seller":
+                cursor.execute(
+                    """
+                    INSERT OR IGNORE INTO Sellers (email, bank_routing_number, bank_account_number, balance)
+                    VALUES (?, ?, ?, 0)
+                    """,
+                    (email, "", 0),
+                )
+            else:
+                cursor.execute("DELETE FROM Sellers WHERE email = ?", (email,))
+            if role == "helpdesk":
+                cursor.execute("DELETE FROM Bidders WHERE email = ?", (email,))
+                cursor.execute("DELETE FROM Sellers WHERE email = ?", (email,))
+                cursor.execute(
+                    "INSERT OR IGNORE INTO Helpdesk (email, Position) VALUES (?, ?)",
+                    (email, full_name or "Helpdesk Staff"),
+                )
+
+        conn.commit()
+        return True, "User account updated."
+    except sql.Error as e:
+        conn.rollback()
+        return False, f"Database Error: {e}"
+    finally:
+        conn.close()
+
+def create_real_category(parent_category, category_name):
+    parent_category = parent_category or "Root"
+    category_name = (category_name or "").strip()
+    if not category_name:
+        return False, "Please provide a category name."
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO Categories (category_name, parent_category) VALUES (?, ?)",
+            (category_name, parent_category),
+        )
+        conn.commit()
+        return True, f"Successfully added '{category_name}' under '{parent_category}'."
+    except sql.IntegrityError:
+        return False, f"The category '{category_name}' already exists."
+    finally:
+        conn.close()
+
+def create_request_ticket(sender_email, request_type, description):
+    if not request_type or not description:
+        return False, "Please fill out all helpdesk fields."
+    conn = get_connection()
+    try:
+        conn.execute(
+            """
+            INSERT INTO Requests (sender_email, helpdesk_staff_email, request_type, request_desc, request_status)
+            VALUES (?, ?, ?, ?, 0)
+            """,
+            (sender_email, DEFAULT_HELPDESK_EMAIL, request_type, description),
+        )
+        conn.commit()
+        return True, "Your request has been submitted successfully!"
+    except sql.Error as e:
+        return False, f"Database Error: {e}"
+    finally:
+        conn.close()
+
+def update_request_ticket(ticket_id, staff_email, status_label, assigned_email=None, assign_to_me=False):
+    status_value = REQUEST_STATUS_VALUE.get(status_label, 0)
+    assignment = staff_email if assign_to_me else (assigned_email or staff_email)
+    conn = get_connection()
+    try:
+        result = conn.execute(
+            """
+            UPDATE Requests
+            SET request_status = ?, helpdesk_staff_email = ?
+            WHERE request_id = ?
+              AND (helpdesk_staff_email = ? OR helpdesk_staff_email = ?)
+            """,
+            (status_value, assignment, ticket_id, staff_email, DEFAULT_HELPDESK_EMAIL),
+        )
+        conn.commit()
+        if result.rowcount:
+            return True, f"Ticket #{ticket_id} updated."
+        return False, "Ticket not found, or it is assigned to another helpdesk staff member."
     finally:
         conn.close()
 
@@ -401,9 +509,29 @@ def collect_helpdesk_context():
     ensure_admin_schema()
     conn = get_connection(row_factory=True)
 
-    # Fetch Users
     users = conn.execute(
-        f"SELECT email, full_name, role, user_status, created_at FROM {USERS_TABLE} ORDER BY created_at DESC"
+        """
+        SELECT
+            ul.email,
+            COALESCE(
+                NULLIF(TRIM(COALESCE(b.first_name, '') || ' ' || COALESCE(b.last_name, '')), ''),
+                h.Position,
+                ul.email
+            ) AS full_name,
+            CASE
+                WHEN h.email IS NOT NULL THEN 'helpdesk'
+                WHEN s.email IS NOT NULL THEN 'seller'
+                WHEN b.email IS NOT NULL THEN 'bidder'
+                ELSE 'unknown'
+            END AS role,
+            'Active' AS user_status,
+            '' AS created_at
+        FROM User_Login ul
+        LEFT JOIN Bidders b ON b.email = ul.email
+        LEFT JOIN Sellers s ON s.email = ul.email
+        LEFT JOIN Helpdesk h ON h.email = ul.email
+        ORDER BY ul.email
+        """
     ).fetchall()
 
     # Fetch ALL Categories
@@ -426,21 +554,43 @@ def collect_helpdesk_context():
     # These are the ones that will become the primary Accordion cards.
     top_categories = tree_map.get('Root', [])
 
-    tickets = conn.execute(
-        f"""
-        SELECT id, sender_email, assigned_email, category_name, subject, description, status, priority,
-               created_at, updated_at
-        FROM {TICKETS_TABLE}
-        ORDER BY created_at DESC
+    staff_email = session.get("user_email")
+    ticket_rows = conn.execute(
         """
+        SELECT request_id, sender_email, helpdesk_staff_email, request_type, request_desc, request_status
+        FROM Requests
+        WHERE helpdesk_staff_email IN (?, ?)
+        ORDER BY request_id DESC
+        """,
+        (staff_email, DEFAULT_HELPDESK_EMAIL),
     ).fetchall()
+    tickets = []
+    for row in ticket_rows:
+        tickets.append({
+            "id": row["request_id"],
+            "sender_email": row["sender_email"],
+            "assigned_email": row["helpdesk_staff_email"],
+            "is_unassigned": row["helpdesk_staff_email"] == DEFAULT_HELPDESK_EMAIL,
+            "category_name": row["request_type"],
+            "subject": row["request_type"],
+            "description": row["request_desc"],
+            "status": REQUEST_STATUS.get(row["request_status"], "Open"),
+            "status_code": row["request_status"],
+            "priority": "Medium",
+            "created_at": "",
+            "updated_at": "",
+        })
+    all_ticket_statuses = conn.execute("SELECT request_status FROM Requests").fetchall()
+    staff_count = conn.execute("SELECT COUNT(*) AS total FROM Helpdesk").fetchone()["total"]
+    category_count = conn.execute("SELECT COUNT(*) AS total FROM Categories").fetchone()["total"]
+    user_count = conn.execute("SELECT COUNT(*) AS total FROM User_Login").fetchone()["total"]
     conn.close()
 
     metrics = {
-        "total_users": len(users),
-        "open_tickets": sum(1 for ticket in tickets if ticket["status"] != "Closed"),
-        "categories": len(raw_categories),
-        "staff_members": sum(1 for user in users if user["role"] == "helpdesk"),
+        "total_users": user_count,
+        "open_tickets": sum(1 for ticket in all_ticket_statuses if ticket["request_status"] != 2),
+        "categories": category_count,
+        "staff_members": staff_count,
     }
 
     return {
@@ -455,25 +605,30 @@ def build_export_rows():
     ensure_admin_schema()
     conn = get_connection(row_factory=True)
     rows = conn.execute(
-        f"""
+        """
         SELECT
-            t.id AS ticket_id,
-            t.subject,
-            t.category_name,
-            t.status,
-            t.priority,
-            t.created_at,
-            t.updated_at,
-            sender.full_name AS sender_name,
-            sender.email AS sender_email,
-            sender.role AS sender_role,
-            sender.user_status AS sender_status,
-            t.assigned_email,
-            c.description AS category_description
-        FROM {TICKETS_TABLE} t
-        LEFT JOIN {USERS_TABLE} sender ON sender.email = t.sender_email
-        LEFT JOIN {CATEGORIES_TABLE} c ON c.name = t.category_name
-        ORDER BY t.created_at DESC
+            r.request_id,
+            r.request_type,
+            r.request_desc,
+            r.request_status,
+            r.sender_email,
+            r.helpdesk_staff_email,
+            COALESCE(
+                NULLIF(TRIM(COALESCE(b.first_name, '') || ' ' || COALESCE(b.last_name, '')), ''),
+                r.sender_email
+            ) AS sender_name,
+            CASE
+                WHEN h.email IS NOT NULL THEN 'helpdesk'
+                WHEN s.email IS NOT NULL THEN 'seller'
+                WHEN b.email IS NOT NULL THEN 'bidder'
+                ELSE 'unknown'
+            END AS sender_role
+        FROM Requests r
+        LEFT JOIN User_Login ul ON ul.email = r.sender_email
+        LEFT JOIN Bidders b ON b.email = r.sender_email
+        LEFT JOIN Sellers s ON s.email = r.sender_email
+        LEFT JOIN Helpdesk h ON h.email = r.sender_email
+        ORDER BY r.request_id DESC
         """
     ).fetchall()
     conn.close()
@@ -482,19 +637,19 @@ def build_export_rows():
     for row in rows:
         export_rows.append(
             {
-                "Ticket ID": row["ticket_id"],
-                "Subject": row["subject"],
-                "Ticket Category": row["category_name"],
-                "Ticket Status": row["status"],
-                "Priority": row["priority"],
-                "Created At": row["created_at"],
-                "Updated At": row["updated_at"],
+                "Ticket ID": row["request_id"],
+                "Subject": row["request_type"],
+                "Ticket Category": row["request_type"],
+                "Ticket Status": REQUEST_STATUS.get(row["request_status"], "Open"),
+                "Priority": "Medium",
+                "Created At": "",
+                "Updated At": "",
                 "Sender Name": row["sender_name"] or "Unknown",
                 "Sender Email": row["sender_email"] or "Unknown",
                 "Sender Role": row["sender_role"] or "Unknown",
-                "Sender Status": row["sender_status"] or "Unknown",
-                "Assigned Staff": row["assigned_email"],
-                "Category Description": row["category_description"] or "",
+                "Sender Status": "Active",
+                "Assigned Staff": row["helpdesk_staff_email"],
+                "Category Description": "",
             }
         )
     return export_rows
