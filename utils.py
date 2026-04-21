@@ -20,57 +20,61 @@ REQUEST_STATUS_VALUE = {label: value for value, label in REQUEST_STATUS.items()}
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
+
 def init_db():
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS Notifications (
-            notification_id Integer PRIMARY KEY AUTOINCREMENT,
-            user_email TEXT NOT NULL,
-            content TEXT NOT NULL,
-            link TEXT,
-            is_read INTEGER NOT NULL DEFAULT 0 CHECK (is_read IN (0, 1)),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_email) REFERENCES User_Login(email)
-        )
-    """)
+                   CREATE TABLE IF NOT EXISTS Notifications
+                   (
+                       notification_id Integer PRIMARY KEY AUTOINCREMENT,
+                       user_email      TEXT    NOT NULL,
+                       content         TEXT    NOT NULL,
+                       link            TEXT,
+                       is_read         INTEGER NOT NULL DEFAULT 0 CHECK (is_read IN (0, 1)),
+                       created_at      TIMESTAMP        DEFAULT CURRENT_TIMESTAMP,
+                       FOREIGN KEY (user_email) REFERENCES User_Login (email)
+                   )
+                   """)
 
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS Chat_Threads(
-            thread_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bidder_email TEXT NOT NULL,
-            seller_email TEXT NOT NULL,
-            listing_id INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE (bidder_email, seller_email, listing_id),
-            FOREIGN KEY (bidder_email) REFERENCES User_Login(email),
-            FOREIGN KEY (seller_email) REFERENCES User_Login(email)
-        )
-    """)
+                   CREATE TABLE IF NOT EXISTS Chat_Threads
+                   (
+                       thread_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+                       bidder_email TEXT    NOT NULL,
+                       seller_email TEXT    NOT NULL,
+                       listing_id   INTEGER NOT NULL,
+                       created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                       UNIQUE (bidder_email, seller_email, listing_id),
+                       FOREIGN KEY (bidder_email) REFERENCES User_Login (email),
+                       FOREIGN KEY (seller_email) REFERENCES User_Login (email)
+                   )
+                   """)
 
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS Chat_Messages
-        (
-            message_id   INTEGER PRIMARY KEY AUTOINCREMENT,
-            thread_id    INTEGER NOT NULL,
-            sender_email TEXT    NOT NULL,
-            content      TEXT    NOT NULL,
-            sent_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (thread_id) REFERENCES Chat_Threads (thread_id) ON DELETE CASCADE,
-            FOREIGN KEY (sender_email) REFERENCES User_Login (email)
-        )
-    """)
+                   CREATE TABLE IF NOT EXISTS Chat_Messages
+                   (
+                       message_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                       thread_id    INTEGER NOT NULL,
+                       sender_email TEXT    NOT NULL,
+                       content      TEXT    NOT NULL,
+                       sent_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                       FOREIGN KEY (thread_id) REFERENCES Chat_Threads (thread_id) ON DELETE CASCADE,
+                       FOREIGN KEY (sender_email) REFERENCES User_Login (email)
+                   )
+                   """)
 
     cursor.execute("""
-                   CREATE TABLE IF NOT EXISTS Watchlist (
-            Bidder_Email TEXT NOT NULL,
-            Listing_ID INTEGER NOT NULL,
-            Seller_Email TEXT NOT NULL,
-            PRIMARY KEY (Bidder_Email, Listing_ID),
-            FOREIGN KEY (Bidder_Email) REFERENCES Bidders(email),
-            FOREIGN KEY (Listing_ID) REFERENCES Auction_Listings(Listing_ID)
-        )
-    """)
+                   CREATE TABLE IF NOT EXISTS Watchlist
+                   (
+                       Bidder_Email TEXT    NOT NULL,
+                       Listing_ID   INTEGER NOT NULL,
+                       Seller_Email TEXT    NOT NULL,
+                       PRIMARY KEY (Bidder_Email, Listing_ID),
+                       FOREIGN KEY (Bidder_Email) REFERENCES Bidders (email),
+                       FOREIGN KEY (Listing_ID) REFERENCES Auction_Listings (Listing_ID)
+                   )
+                   """)
 
     cursor.execute("""
                    CREATE TABLE IF NOT EXISTS Ratings
@@ -86,16 +90,26 @@ def init_db():
                    )
                    """)
 
-    # Add Listing_ID as a regular column to Ratings if it doesn't exist
     cursor.execute("PRAGMA table_info(Ratings)")
     columns = [col[1] for col in cursor.fetchall()]
 
     if 'Listing_ID' not in columns:
-        print("Adding Listing_ID column to Ratings...")
         try:
             cursor.execute("ALTER TABLE Ratings ADD COLUMN Listing_ID INTEGER")
-        except sql.Error as e:
-            print(f"Migration error: {e}")
+        except sql.Error:
+            pass
+
+    cursor.execute("PRAGMA table_info(Auction_Listings)")
+    al_columns = [col[1] for col in cursor.fetchall()]
+
+    if 'is_promoted' not in al_columns:
+        try:
+            cursor.execute("ALTER TABLE Auction_Listings ADD COLUMN is_promoted INTEGER DEFAULT 0")
+            cursor.execute("ALTER TABLE Auction_Listings ADD COLUMN promotion_timestamp TIMESTAMP")
+            cursor.execute("ALTER TABLE Auction_Listings ADD COLUMN promotion_fee REAL")
+        except sql.Error:
+            pass
+
     conn.commit()
     conn.close()
 

@@ -119,13 +119,16 @@
                 <div class="result-card">
                     <div class="row">
                         <div class="col-md-8">
-
                             <h5 class="mb-1">
                                 <a href="/auction/{{ item.seller_email }}/{{ item.listing_id }}" class="text-navy text-decoration-none">
                                     {{ item.auction_title }}
                                 </a>
+                                {% if item.is_promoted %}
+                                    <span class="badge badge-warning text-dark ml-2" style="font-size: 0.65em; vertical-align: middle;">Promoted</span>
+                                {% endif %}
                             </h5>
                             <p class="text-muted mb-1">{{ item.product_name }}</p>
+
                             <small class="text-muted">
                                 <span class="badge badge-light">{{ item.category }}</span>
                                 &nbsp; Listing #{{ item.listing_id }}

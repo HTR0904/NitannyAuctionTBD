@@ -1021,7 +1021,6 @@ def search():
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
 
-    # Fetch top-level categories
     cursor.execute('''
                    SELECT category_name
                    FROM Categories
@@ -1035,9 +1034,7 @@ def search():
     having_clauses = []
     breadcrumbs = []
 
-    # Keyword Filter: Title, Product Name, Description, or Seller Name
     if query:
-        # Search listing details and seller names (Business Name or First/Last Name)
         where_clauses.append("""
             (al.Auction_Title LIKE ? 
              OR al.Product_Name LIKE ? 
@@ -1049,7 +1046,6 @@ def search():
         kw = f'%{query}%'
         params.extend([kw, kw, kw, kw, kw, kw])
 
-    # Category Filter with Recursive Lookup
     if selected_category:
         current_node = selected_category
         while current_node:
@@ -1071,7 +1067,6 @@ def search():
         where_clauses.append(f"al.Category IN ({placeholders})")
         params.extend(descendants)
 
-    # Price Filter Logic
     price_expr_reserve = "CAST(REPLACE(REPLACE(al.Reserve_Price, '$', ''), ',', '') AS REAL)"
     price_expr_bid = "COALESCE(MAX(b.Bid_Price), 0)"
 
@@ -1090,7 +1085,6 @@ def search():
             having_clauses.append(f"{price_expr_bid} <= ?")
             params.append(float(max_price))
 
-    # Joining Local_Vendors and Bidders to get seller identity
     sql_query = '''
                 SELECT al.Listing_ID, 
                        al.Seller_Email, 
@@ -1100,7 +1094,8 @@ def search():
                        al.Reserve_Price, 
                        COUNT(b.Bid_ID)  AS bid_count, 
                        MAX(b.Bid_Price) AS current_bid,
-                       COALESCE(lv.Business_Name, bdr.first_name || ' ' || bdr.last_name) AS seller_name
+                       COALESCE(lv.Business_Name, bdr.first_name || ' ' || bdr.last_name) AS seller_name,
+                       al.is_promoted
                 FROM Auction_Listings al
                          LEFT JOIN Local_Vendors lv ON al.Seller_Email = lv.Email
                          LEFT JOIN Bidders bdr ON al.Seller_Email = bdr.email
@@ -1113,12 +1108,12 @@ def search():
     if where_clauses:
         sql_query += " AND " + " AND ".join(where_clauses)
 
-    sql_query += " GROUP BY al.Listing_ID, al.Seller_Email, lv.Business_Name, bdr.first_name, bdr.last_name"
+    sql_query += " GROUP BY al.Listing_ID, al.Seller_Email, lv.Business_Name, bdr.first_name, bdr.last_name, al.is_promoted"
 
     if having_clauses:
         sql_query += " HAVING " + " AND ".join(having_clauses)
 
-    sql_query += " ORDER BY al.Listing_ID DESC"
+    sql_query += " ORDER BY al.is_promoted DESC, al.Listing_ID DESC"
 
     cursor.execute(sql_query, params)
 
@@ -1133,7 +1128,8 @@ def search():
             'reserve_price': row[5],
             'bid_count': row[6],
             'current_bid': row[7],
-            'seller_name': row[8]
+            'seller_name': row[8],
+            'is_promoted': row[9]
         })
 
     conn.close()
@@ -1353,6 +1349,49 @@ def chat_delete(thread_id):
     conn.commit()
     conn.close()
     return redirect('/chats')
+
+@app.route('/promote_auction', methods=['POST'])
+def promote_auction():
+    if 'user_email' not in session or session.get('account_type') != '/seller':
+        return redirect('/')
+
+    seller_email = session['user_email']
+    listing_id = request.form.get('listing_id', type=int)
+
+    conn = sql.connect(DB_NAME)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT Reserve_Price, is_promoted FROM Auction_Listings WHERE Listing_ID = ? AND Seller_Email = ?", (listing_id, seller_email))
+        item = cursor.fetchone()
+
+        if item:
+            if item[1] == 1:
+                flash("Auction is already promoted.", "listing_error")
+            else:
+                try:
+                    res_clean = str(item[0]).replace('$', '').replace(',', '')
+                    res_val = float(res_clean)
+                except ValueError:
+                    res_val = 0.0
+
+                fee = res_val * 0.05
+
+                cursor.execute("""
+                    UPDATE Auction_Listings
+                    SET is_promoted = 1, promotion_timestamp = CURRENT_TIMESTAMP, promotion_fee = ?
+                    WHERE Listing_ID = ? AND Seller_Email = ?
+                """, (fee, listing_id, seller_email))
+                conn.commit()
+                flash(f"Auction #{listing_id} successfully promoted for a fee of ${fee:.2f}.", "listing_success")
+        else:
+            flash("Auction not found.", "listing_error")
+    except sql.Error:
+        conn.rollback()
+        flash("Database error occurred.", "listing_error")
+    finally:
+        conn.close()
+
+    return redirect('/seller')
 
 
 if __name__ == '__main__':
