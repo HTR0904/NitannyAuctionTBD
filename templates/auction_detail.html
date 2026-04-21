@@ -119,11 +119,16 @@
                         <h2>No bids yet</h2>
                     {% endif %}
 
-                    <p class="small-muted">Minimum next bid: ${{ item.min_bid }}</p>
-                    <p class="small-muted">Total bids: {{ item.bid_count }}</p>
+                    <p class="small-muted mb-1">Minimum next bid: ${{ item.min_bid }}</p>
+                    <p class="small-muted mb-1">Total bids: {{ item.bid_count }} / {{ item.max_bids }}</p>
+
+                    {# Added Bids Remaining Display #}
+                    {% if item.status_code == 1 %}
+                        <p class="text-info font-weight-bold">Bids remaining: {{ item.max_bids - item.bid_count }}</p>
+                    {% endif %}
 
                     {% if my_bid %}
-                        <p><strong>Your highest bid:</strong> ${{ my_bid }}</p>
+                        <p class="mb-0 mt-2"><strong>Your highest bid:</strong> ${{ my_bid }}</p>
                     {% endif %}
 
                     <hr>
@@ -185,12 +190,16 @@
                             </div>
 
                             {% if has_paid %}
-                                {# User has paid - Show Rate Modal Button #}
-                                <button type="button" class="btn btn-navy btn-block btn-lg font-weight-bold" data-toggle="modal" data-target="#ratingModal">
-                                    Rate Seller
-                                </button>
+                                {% if has_rated %}
+                                    <div class="alert alert-secondary text-center font-weight-bold">
+                                        Rating Submitted
+                                    </div>
+                                {% else %}
+                                    <button type="button" class="btn btn-navy btn-block btn-lg font-weight-bold" data-toggle="modal" data-target="#ratingModal">
+                                        Rate Seller
+                                    </button>
+                                {% endif %}
                             {% else %}
-                                {# User hasn't paid - Show Checkout button #}
                                 <a href="{{ url_for('checkout', seller_email=item.seller_email, listing_id=item.listing_id) }}" class="btn btn-success btn-block btn-lg font-weight-bold">
                                     Proceed to Payment
                                 </a>

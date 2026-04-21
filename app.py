@@ -119,6 +119,7 @@ def auction_detail(seller_email, listing_id):
             a.Product_Name AS product_name,
             a.Product_Description AS description,
             a.Category AS category,
+            a.Max_bids AS max_bids,
             a.Reserve_Price AS reserve_price,
             a.Status AS status_code,
             (
@@ -180,7 +181,7 @@ def auction_detail(seller_email, listing_id):
     """, (seller_email, listing_id, me))
     my_bid = cur.fetchone()['my_bid']
 
-    # 5. Check Watchlist status
+    # Check Watchlist status
     cur.execute("""
         SELECT 1
         FROM Watchlist
@@ -390,7 +391,6 @@ def submit_rating():
             return redirect(url_for('auction_detail', seller_email=seller, listing_id=listing_id))
 
         # Check if this specific listing has already been rated by this bidder
-        # Note: Ensure your 'Ratings' table has a 'Listing_ID' column
         cur.execute("""
                     SELECT 1
                     FROM Ratings
@@ -558,7 +558,7 @@ def checkout(seller_email, listing_id):
     db = db_connect()
     cur = db.cursor()
 
-    # 1. Fetch Auction Item using the composite primary key [cite: 37]
+    # Fetch Auction Item
     cur.execute("""
         SELECT
             a.Listing_ID AS listing_id,
