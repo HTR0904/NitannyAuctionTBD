@@ -358,7 +358,7 @@ def place_bid():
             if auction_ended:
                 create_notification(watcher, f"Auction for '{title}' is now closed.", detail_url)
 
-        # Notify Previous Bidder (The one you just outbid)
+        # Notify Previous Bidder (The one just outbid)
         if prev_high_bidder and prev_high_bidder != me:
             create_notification(prev_high_bidder, f"You were outbid on '{title}'! Current bid: ${price}.", detail_url)
 
@@ -375,7 +375,7 @@ def place_bid():
                                     url_for('seller'))
                 # Inform Bidder Reserve Not Met
                 create_notification(me,
-                                    f"Auction ended for '{title}'. Your bid of ${price} did not meet the reserve and is pending seller review.",
+                                    f"Auction ended for '{title}'. Your bid of ${price} did not meet the reserve price.",
                                     detail_url)
 
             # Notify Other Participants
@@ -396,7 +396,6 @@ def place_bid():
         db.close()
 
     return redirect(url_for('auction_detail', seller_email=seller_email_input, listing_id=listing_id))
-
 @app.route('/submit_rating', methods=['POST'])
 def submit_rating():
     if not bidder_only():
