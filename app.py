@@ -37,7 +37,7 @@ def inject_global_variables():
         # Inject the user object (for the navbar name)
         global_vars['current_user'] = get_app_user(user_email)
 
-        # Inject unread notifications globally so the bell icon always works!
+        # Inject unread notifications globally so the bell icon always works
         try:
             db = db_connect()
             cur = db.cursor()
@@ -121,8 +121,7 @@ def bidder():
         card_count=card_count,
         trending_listings=trending,
         my_bids=my_bids,
-        completed_transactions=ratings,
-        current_user=get_app_user(session['user_email']))
+        completed_transactions=ratings)
 
 @app.route('/auction/<seller_email>/<int:listing_id>')
 def auction_detail(seller_email, listing_id):
@@ -226,7 +225,7 @@ def auction_detail(seller_email, listing_id):
     """, (me, listing_id, seller_email))
     is_watching = bool(cur.fetchone())
 
-    # Check if a transaction exists (Uses Buyer_Email from schema)
+    # Check if a transaction exists
     cur.execute("""
         SELECT 1
         FROM Transactions
@@ -509,8 +508,7 @@ def seller():
     return render_template(
         'seller_home.html',
         top_categories=top_categories,
-        my_listings=my_listings,
-        current_user=get_app_user(session['user_email']),
+        my_listings=my_listings
     )
 
 
@@ -538,7 +536,6 @@ def list_product():
             'seller_home.html',
             categories=cats,
             my_listings=[],
-            current_user=get_app_user(session['user_email']),
             **kwargs,
         )
 
@@ -836,14 +833,9 @@ def watchlist():
 
         watched_items = cur.fetchall()
 
-        # Added: Fetch unread notifications for the navbar badge
-        cur.execute("SELECT COUNT(*) AS count FROM Notifications WHERE user_email = ? AND is_read = 0", (me,))
-        unread_count = cur.fetchone()['count']
-
     except sql.Error as e:
         print(f"Database error fetching watchlist: {e}")
         watched_items = []
-        unread_count = 0
         flash("An error occurred while loading your watchlist.", "watch_error")
 
     finally:
@@ -851,8 +843,7 @@ def watchlist():
 
     return render_template(
         'watchlist.html',
-        watchlist=watched_items,
-        unread_notifs_count=unread_count
+        watchlist=watched_items
     )
 
 @app.route('/settings')
