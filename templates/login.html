@@ -86,7 +86,7 @@
                                 <div class="portal-label mb-2">Bidder</div>
                                 <h4 class="font-weight-bold">Browse and bid</h4>
                                 <p class="text-muted small">Access bidder tools and submit support requests from your dashboard.</p>
-                                <form action="/login_bidder" method="POST" class="mt-4">
+                                <form action="{{url_for('auth.login_bidder')}}" method="POST" class="mt-4">
                                     <div class="form-group">
                                         <input type="email" name="bidder_email" class="form-control" placeholder="Email address" required>
                                     </div>
@@ -105,7 +105,7 @@
                                 <div class="portal-label mb-2">Seller</div>
                                 <h4 class="font-weight-bold">Manage listings</h4>
                                 <p class="text-muted small">Create listings, monitor results, and send category or support requests.</p>
-                                <form action="/login_seller" method="POST" class="mt-4">
+                                <form action="{{url_for('auth.login_seller')}}" method="POST" class="mt-4">
                                     <div class="form-group">
                                         <input type="email" name="seller_email" class="form-control" placeholder="Email address" required>
                                     </div>
@@ -124,7 +124,7 @@
                                 <div class="portal-label mb-2">Staff</div>
                                 <h4 class="font-weight-bold">Admin workspace</h4>
                                 <p class="text-muted small">Review tickets, update users, manage categories, and export reports.</p>
-                                <form action="/login_helpdesk" method="POST" class="mt-4">
+                                <form action="{{url_for('auth.login_helpdesk')}}" method="POST" class="mt-4">
                                     <div class="form-group">
                                         <input type="email" name="helpdesk_email" class="form-control" placeholder="Email address" required>
                                     </div>
