@@ -100,3 +100,30 @@ def delete_all():
     conn.commit()
     conn.close()
     return redirect(url_for('.notifications'))
+
+
+@notif_bp.app_context_processor
+def inject_notifications_count():
+    if 'user_email' in session:
+        try:
+            db = db_connect()
+            cur = db.cursor()
+
+            # Count unread notifications (is_read = 0)
+            cur.execute("""
+                        SELECT COUNT(*) as count
+                        FROM Notifications
+                        WHERE user_email = ?
+                          AND is_read = 0
+                        """, (session['user_email'],))
+
+            result = cur.fetchone()
+            db.close()
+
+            return dict(unread_notifs_count=result['count'] if result else 0)
+        except Exception as e:
+            print(f"Notification Badge Error: {e}")
+            return dict(unread_notifs_count=0)
+
+    # If no one is logged in, the count is 0
+    return dict(unread_notifs_count=0)

@@ -71,7 +71,7 @@ def init_db():
     conn.close()
 
 def create_notification(user_email, content, link=None):
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect("dataset_tables.db", timeout=20)
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO Notifications (user_email, content, link) VALUES (?, ?, ?)",

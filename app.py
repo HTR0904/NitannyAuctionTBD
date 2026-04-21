@@ -218,76 +218,130 @@ def place_bid():
     cur = db.cursor()
 
     try:
+        # Fetch item details
         cur.execute("""
-                    SELECT Seller_Email, Status, Max_bids, Reserve_Price
+                    SELECT Seller_Email,
+                           Status,
+                           Max_bids,
+                           Reserve_Price,
+                           COALESCE(NULLIF(Auction_Title, ''), Product_Name) as title
                     FROM Auction_Listings
                     WHERE Listing_ID = ?
                     """, (listing_id,))
         item = cur.fetchone()
 
-        if not item:
-            bidder_msg('danger', 'Auction not found.')
+        if not item or item['Status'] != 1:
+            bidder_msg('danger', 'Auction not active.')
             return redirect(url_for('bidder'))
 
         seller = item['Seller_Email']
         max_allowed = item['Max_bids']
+        title = item['title']
+        detail_url = url_for('auction_detail', listing_id=listing_id)
 
-        if seller == me:
-            bidder_msg('danger', 'You cannot bid on your own auction.')
-        elif item['Status'] != 1:
-            bidder_msg('danger', 'This auction is not active.')
-        else:
-            # New bid must be at least $1 higher than previous bids
-            cur.execute("""
-                        SELECT COALESCE(MAX(Bid_Price), 0) + 1 AS needed
-                        FROM Bids
-                        WHERE Seller_Email = ?
-                          AND Listing_ID = ?
-                        """, (seller, listing_id))
-            needed = cur.fetchone()['needed']
+        # Check for Previous High Bidder (Outbid alert)
+        cur.execute("""
+                    SELECT Bidder_Email
+                    FROM Bids
+                    WHERE Listing_ID = ?
+                      AND Seller_Email = ?
+                    ORDER BY Bid_Price DESC
+                    LIMIT 1
+                    """, (listing_id, seller))
+        prev_row = cur.fetchone()
+        prev_high_bidder = prev_row['Bidder_Email'] if prev_row else None
 
-            if price < needed:
-                bidder_msg('danger', f'Your bid must be at least ${needed}.')
-            else:
-                # Insert the new bid
+        # 3. Enforce the $1 increment rule
+        cur.execute("""
+                    SELECT COALESCE(MAX(Bid_Price), 0) + 1 AS needed
+                    FROM Bids
+                    WHERE Seller_Email = ?
+                      AND Listing_ID = ?
+                    """, (seller, listing_id))
+        needed = cur.fetchone()['needed']
+
+        if price < needed:
+            bidder_msg('danger', f'Your bid must be at least ${needed}.')
+            return redirect(detail_url)
+
+        cur.execute("""
+                    INSERT INTO Bids (Seller_Email, Listing_ID, Bidder_Email, Bid_Price)
+                    VALUES (?, ?, ?, ?)
+                    """, (seller, listing_id, me, price))
+
+        auction_ended = False
+        reserve_met = False
+
+        cur.execute("SELECT COUNT(*) as cnt FROM Bids WHERE Listing_ID=? AND Seller_Email=?", (listing_id, seller))
+        if cur.fetchone()['cnt'] >= max_allowed:
+            auction_ended = True
+
+            try:
+                # Clean reserve price for comparison
+                res_val = float(item['Reserve_Price'].replace('$', '').replace(',', ''))
+            except:
+                res_val = 0.0
+
+            if price >= res_val:
+                reserve_met = True
+                # Auction Status -> Sold (2)
+                cur.execute("UPDATE Auction_Listings SET Status = 2 WHERE Listing_ID = ? AND Seller_Email = ?",
+                            (listing_id, seller))
+                # Record Payment in Transactions
                 cur.execute("""
-                            INSERT INTO Bids (Seller_Email, Listing_ID, Bidder_Email, Bid_Price)
-                            VALUES (?, ?, ?, ?)
+                            INSERT INTO Transactions (Seller_Email, Listing_ID, Buyer_Email, Date, Payment)
+                            VALUES (?, ?, ?, date('now'), ?)
                             """, (seller, listing_id, me, price))
+            else:
+                # Auction Status -> Inactive (0)
+                cur.execute("UPDATE Auction_Listings SET Status = 0 WHERE Listing_ID = ? AND Seller_Email = ?",
+                            (listing_id, seller))
+        db.commit()
 
-                # Check if Max_bids is reached
-                cur.execute("""
-                            SELECT COUNT(*) as current_count
-                            FROM Bids
-                            WHERE Listing_ID = ?
-                              AND Seller_Email = ?
-                            """, (listing_id, seller))
-                actual_count = cur.fetchone()['current_count']
+        # TRIGGER NOTIFICATIONS
+        # Notify Watchers
+        cur.execute("SELECT Bidder_Email FROM Watchlist WHERE Listing_ID=? AND Seller_Email=?", (listing_id, seller))
+        watchers = [row['Bidder_Email'] for row in cur.fetchall()]
+        for watcher in watchers:
+            if watcher != me:
+                create_notification(watcher, f"New bid on '{title}': ${price}", detail_url)
+            if auction_ended:
+                create_notification(watcher, f"Auction for '{title}' is now closed.", detail_url)
 
-                if actual_count >= max_allowed:
-                    # Update status to 2 (sold)
-                    cur.execute("""
-                                UPDATE Auction_Listings
-                                SET Status = 2
-                                WHERE Listing_ID = ?
-                                  AND Seller_Email = ?
-                                """, (listing_id, seller))
+        # Notify Previous Bidder
+        if prev_high_bidder and prev_high_bidder != me:
+            create_notification(prev_high_bidder, f"You were outbid on '{title}'! Current bid: ${price}.", detail_url)
 
-                    # Record the transaction
-                    cur.execute("""
-                                INSERT INTO Transactions (Seller_Email, Listing_ID, Bidder_Email, Date, Payment)
-                                VALUES (?, ?, ?, date('now'), ?)
-                                """, (seller, listing_id, me, price))
+        if auction_ended:
+            # Notify Seller (Always notify seller when auction ends)
+            if reserve_met:
+                create_notification(seller, f"SOLD! '{title}' hit max bids and met reserve. Sold to {me} for ${price}.",
+                                    url_for('seller'))
+                # Inform Bidder Reserve Met
+                create_notification(me, f"You won '{title}'! Your bid of ${price} met the reserve price.", detail_url)
+            else:
+                create_notification(seller,
+                                    f"Auction Ended: '{title}' reached max bids but did NOT meet reserve. High bid: ${price}.",
+                                    url_for('seller'))
+                # Inform Bidder Reserve Not Met
+                create_notification(me,
+                                    f"Auction ended for '{title}'. Your bid of ${price} did not meet the reserve and is pending seller review.",
+                                    detail_url)
 
-                    bidder_msg('success', 'Bid placed. Max bids reached—Auction Closed!')
-                else:
-                    bidder_msg('success', 'Your bid was placed.')
+            # Notify Other Participants
+            cur.execute("SELECT DISTINCT Bidder_Email FROM Bids WHERE Listing_ID=? AND Seller_Email=?",
+                        (listing_id, seller))
+            for p in cur.fetchall():
+                p_email = p['Bidder_Email']
+                if p_email not in [me, seller]:
+                    create_notification(p_email, f"The auction for '{title}' has ended.", detail_url)
 
-                db.commit()
+        bidder_msg('success', 'Bid placed successfully.')
 
-    except sql.Error as e:
+    except Exception as e:
         db.rollback()
-        bidder_msg('danger', 'Database error occurred.')
+        print(f"Bidding Error: {e}")
+        bidder_msg('danger', 'A database error occurred.')
     finally:
         db.close()
 
