@@ -199,6 +199,7 @@ def auction_detail(listing_id):
         message=session.pop('bidder_msg', None)
     )
 
+
 @app.route('/place_bid', methods=['POST'])
 def place_bid():
     if not bidder_only():
@@ -218,62 +219,79 @@ def place_bid():
 
     try:
         cur.execute("""
-            SELECT Seller_Email, Status
-            FROM Auction_Listings
-            WHERE Listing_ID = ?
-        """, (listing_id,))
+                    SELECT Seller_Email, Status, Max_bids, Reserve_Price
+                    FROM Auction_Listings
+                    WHERE Listing_ID = ?
+                    """, (listing_id,))
         item = cur.fetchone()
 
-        if item is None:
+        if not item:
             bidder_msg('danger', 'Auction not found.')
             return redirect(url_for('bidder'))
 
         seller = item['Seller_Email']
+        max_allowed = item['Max_bids']
 
         if seller == me:
             bidder_msg('danger', 'You cannot bid on your own auction.')
         elif item['Status'] != 1:
             bidder_msg('danger', 'This auction is not active.')
         else:
+            # New bid must be at least $1 higher than previous bids
             cur.execute("""
-                SELECT 1
-                FROM Credit_Cards
-                WHERE Owner_email = ?
-                LIMIT 1
-            """, (me,))
+                        SELECT COALESCE(MAX(Bid_Price), 0) + 1 AS needed
+                        FROM Bids
+                        WHERE Seller_Email = ?
+                          AND Listing_ID = ?
+                        """, (seller, listing_id))
+            needed = cur.fetchone()['needed']
 
-            if cur.fetchone() is None:
-                bidder_msg('danger', 'Add a credit card before placing a bid.')
+            if price < needed:
+                bidder_msg('danger', f'Your bid must be at least ${needed}.')
             else:
+                # Insert the new bid
                 cur.execute("""
-                    SELECT COALESCE(MAX(Bid_Price), 0) + 1 AS needed
-                    FROM Bids
-                    WHERE Seller_Email = ?
-                      AND Listing_ID = ?
-                """, (seller, listing_id))
-                needed = cur.fetchone()['needed']
+                            INSERT INTO Bids (Seller_Email, Listing_ID, Bidder_Email, Bid_Price)
+                            VALUES (?, ?, ?, ?)
+                            """, (seller, listing_id, me, price))
 
-                if price < needed:
-                    bidder_msg('danger', f'Your bid must be at least ${needed}.')
-                else:
+                # Check if Max_bids is reached
+                cur.execute("""
+                            SELECT COUNT(*) as current_count
+                            FROM Bids
+                            WHERE Listing_ID = ?
+                              AND Seller_Email = ?
+                            """, (listing_id, seller))
+                actual_count = cur.fetchone()['current_count']
+
+                if actual_count >= max_allowed:
+                    # Update status to 2 (sold)
                     cur.execute("""
-                        INSERT INTO Bids
-                            (Seller_Email, Listing_ID, Bidder_Email, Bid_Price)
-                        VALUES (?, ?, ?, ?)
-                    """, (seller, listing_id, me, price))
-                    db.commit()
+                                UPDATE Auction_Listings
+                                SET Status = 2
+                                WHERE Listing_ID = ?
+                                  AND Seller_Email = ?
+                                """, (listing_id, seller))
+
+                    # Record the transaction
+                    cur.execute("""
+                                INSERT INTO Transactions (Seller_Email, Listing_ID, Bidder_Email, Date, Payment)
+                                VALUES (?, ?, ?, date('now'), ?)
+                                """, (seller, listing_id, me, price))
+
+                    bidder_msg('success', 'Bid placed. Max bids reached—Auction Closed!')
+                else:
                     bidder_msg('success', 'Your bid was placed.')
+
+                db.commit()
 
     except sql.Error as e:
         db.rollback()
-        print("Bid error:", e)
-        bidder_msg('danger', 'Something went wrong while placing your bid.')
-
+        bidder_msg('danger', 'Database error occurred.')
     finally:
         db.close()
 
     return redirect(url_for('auction_detail', listing_id=listing_id))
-
 
 @app.route('/submit_rating', methods=['POST'])
 def submit_rating():

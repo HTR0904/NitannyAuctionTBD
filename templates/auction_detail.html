@@ -145,6 +145,10 @@
                                 <button class="btn btn-navy btn-block" type="submit">Place Bid</button>
                             </form>
                         {% endif %}
+                    {% elif item.status_code == 2 %}
+                        <div class="alert alert-success font-weight-bold">
+                            Max bids reached.
+                        </div>
                     {% else %}
                         <div class="alert alert-secondary">This auction is closed.</div>
                     {% endif %}
