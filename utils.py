@@ -578,12 +578,14 @@ def collect_helpdesk_context():
 
     top_categories = tree_map.get('Root', [])
 
-    # Metrics
+    # Updated Metrics Query to include Open Tickets and Staff Members
     stats = conn.execute(
         """
         SELECT 
             (SELECT COUNT(*) FROM User_Login) as u_count,
-            (SELECT COUNT(*) FROM Categories) as c_count
+            (SELECT COUNT(*) FROM Categories) as c_count,
+            (SELECT COUNT(*) FROM Requests WHERE request_status != 2) as o_count,
+            (SELECT COUNT(*) FROM Helpdesk) as s_count
         """
     ).fetchone()
 
@@ -596,7 +598,9 @@ def collect_helpdesk_context():
         "tickets": tickets,
         "metrics": {
             "total_users": stats["u_count"],
-            "categories": stats["c_count"]
+            "categories": stats["c_count"],
+            "open_tickets": stats["o_count"],
+            "staff_members": stats["s_count"]
         }
     }
 
