@@ -6,105 +6,153 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
     <title>Notifications - Nittany Auction</title>
     <style>
-        .bg-navy { background-color: #041E42; }
-        .text-navy { color: #041E42; }
+        :root { --navy: #041e42; --navy-soft: #153d72; --cloud: #eef3fb; }
+        body { background: linear-gradient(180deg, #f4f7fb, #ffffff); min-height: 100vh; }
+
+        .bg-navy { background-color: var(--navy); }
+        .text-navy { color: var(--navy) !important; }
+
+        .section-header { border-left: 5px solid var(--navy); padding-left: 15px; margin-bottom: 30px; }
+
+        /* Notification Card Styling */
         .notif-card {
-            background-color: white;
-            border: 1px solid #dee2e6;
+            background: white;
+            border: 0;
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 12px rgba(4, 30, 66, 0.05);
             border-left: 4px solid #dee2e6;
-            border-radius: 0.25rem;
-            padding: 1rem;
-            margin-bottom: 0.75rem;
-            transition: all 0.15s;
+            transition: transform 0.15s;
         }
         .notif-card.unread {
-            border-left-color: #041E42;
-            background-color: #f8f9fc;
+            border-left-color: var(--navy);
+            background-color: var(--cloud);
         }
         .notif-card:hover {
-            box-shadow: 0 .125rem .25rem rgba(0,0,0,.1);
+            transform: translateX(4px);
+            box-shadow: 0 8px 20px rgba(4, 30, 66, 0.08);
         }
+
         .notif-time {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             color: #6c757d;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
+
+        /* Reusing Pill Style */
+        .pill {
+            display: inline-block; border-radius: 999px; padding: 0.2rem 0.75rem;
+            background: var(--navy); color: white; font-size: 0.7rem; font-weight: 700;
+            text-transform: uppercase; vertical-align: middle;
+        }
+
+        .btn-navy { background-color: var(--navy); color: white; border: none; }
+        .btn-navy:hover { background-color: var(--navy-soft); color: white; }
+
+        .btn-outline-navy { color: var(--navy); border: 1px solid var(--navy); }
+        .btn-outline-navy:hover { background-color: var(--navy); color: white; }
+
+        .navbar .navbar-text { font-size: 0.9rem; opacity: 0.8; }
     </style>
 </head>
-<body class="bg-light">
+<body>
 
-<nav class="navbar navbar-dark bg-navy">
+<nav class="navbar navbar-dark bg-navy mb-4 shadow-sm">
     <div class="container">
         <a class="navbar-brand font-weight-bold"
-           href="/{{ 'seller' if account_type == '/seller' else 'bidder' }}">← Back to Dashboard</a>
-        <span class="navbar-text text-light">Signed in as: {{ user_email }}</span>
+           href="/{{ 'seller' if account_type == '/seller' else 'bidder' }}">
+            <small class="mr-2">←</small> Dashboard
+        </a>
+        <span class="navbar-text text-light d-none d-md-inline">User: {{ user_email }}</span>
     </div>
 </nav>
 
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="text-navy font-weight-bold mb-0">
-            🔔 Notifications
-            {% set unread_count = notifications | selectattr('is_read', 'equalto', 0) | list | length %}
-            {% if unread_count %}
-            <span class="badge badge-danger">{{ unread_count }} new</span>
-            {% endif %}
-        </h2>
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
 
-        {% if unread_count %}
-        <form action="{{ url_for('notif.mark_all_read') }}" method="POST" class="d-inline">
-            <button type="submit" class="btn btn-outline-dark btn-sm">Mark All as Read</button>
-        </form>
-        {% endif %}
-
-        {% if notifications %}
-        <form action="{{ url_for('notif.delete_all') }}" method="POST" class="d-inline ml-2"
-              onsubmit="return confirm('Delete all notifications? This cannot be undone.');">
-            <button type="submit" class="btn btn-outline-danger btn-sm">Clear All</button>
-        </form>
-        {% endif %}
-    </div>
-
-    {% if notifications %}
-        {% for notif in notifications %}
-        <div class="notif-card {% if not notif.is_read %}unread{% endif %}">
-            <div class="d-flex justify-content-between align-items-start">
-                <div class="flex-grow-1">
-                    <p class="mb-1">
-                        {% if not notif.is_read %}
-                        <strong>{{ notif.content }}</strong>
-                        {% else %}
-                        <span class="text-muted">{{ notif.content }}</span>
+            <div class="d-flex justify-content-between align-items-end mb-4">
+                <div class="section-header mb-0">
+                    <h2 class="text-navy font-weight-bold mb-1">
+                        Notifications
+                        {% set unread_count = notifications | selectattr('is_read', 'equalto', 0) | list | length %}
+                        {% if unread_count %}
+                        <span class="pill ml-2">{{ unread_count }} New</span>
                         {% endif %}
-                    </p>
-                    <div class="notif-time">{{ notif.created_at }}</div>
-                    {% if notif.link %}
-                    <a href="{{ notif.link }}" class="btn btn-outline-dark btn-sm mt-2">View</a>
-                    {% endif %}
+                    </h2>
+                    <p class="text-muted mb-0 small">Stay updated on your bidding and account activity.</p>
                 </div>
-                <div class="ml-3 d-flex flex-column">
-                    {% if not notif.is_read %}
-                    <form action="{{ url_for('notif.mark_read', notif_id=notif.id) }}" method="POST" class="mb-1">
-                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Mark as read">
-                            ✓
-                        </button>
+
+                <div class="d-flex align-items-center">
+                    {% if unread_count %}
+                    <form action="{{ url_for('notif.mark_all_read') }}" method="POST" class="mr-2">
+                        <button type="submit" class="btn btn-outline-navy btn-sm font-weight-bold">Mark All Read</button>
                     </form>
                     {% endif %}
-                    <form action="{{ url_for('notif.delete', notif_id=notif.id) }}" method="POST"
-                          onsubmit="return confirm('Delete this notification?');">
-                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
-                            🗑
-                        </button>
+
+                    {% if notifications %}
+                    <form action="{{ url_for('notif.delete_all') }}" method="POST"
+                          onsubmit="return confirm('Delete all notifications? This cannot be undone.');">
+                        <button type="submit" class="btn btn-outline-secondary btn-sm font-weight-bold">Clear All</button>
                     </form>
+                    {% endif %}
                 </div>
             </div>
+
+            {% if notifications %}
+                {% for notif in notifications %}
+                <div class="notif-card {% if not notif.is_read %}unread{% endif %}">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="notif-time mb-2">{{ notif.created_at }}</div>
+                            <p class="mb-2">
+                                {% if not notif.is_read %}
+                                <strong class="text-navy">{{ notif.content }}</strong>
+                                {% else %}
+                                <span class="text-muted">{{ notif.content }}</span>
+                                {% endif %}
+                            </p>
+                            {% if notif.link %}
+                            <a href="{{ notif.link }}" class="btn btn-navy btn-sm px-3">View Details</a>
+                            {% endif %}
+                        </div>
+
+                        <div class="ml-4 d-flex align-items-center">
+                            {% if not notif.is_read %}
+                            <form action="{{ url_for('notif.mark_read', notif_id=notif.id) }}" method="POST" class="mr-2">
+                                <button type="submit" class="btn btn-sm btn-link text-navy p-0 font-weight-bold" style="text-decoration: none;" title="Mark as read">
+                                    Mark Read
+                                </button>
+                            </form>
+                            {% endif %}
+                            <form action="{{ url_for('notif.delete', notif_id=notif.id) }}" method="POST"
+                                  onsubmit="return confirm('Delete this notification?');">
+                                <button type="submit" class="btn btn-sm btn-link text-danger p-0 font-weight-bold" style="text-decoration: none;" title="Delete">
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+            <div class="text-center py-5">
+                <div class="p-5 bg-white rounded-lg shadow-sm">
+                    <h5 class="text-navy font-weight-bold">All Caught Up</h5>
+                    <p class="text-muted mb-0">You don't have any new notifications at this time.</p>
+                </div>
+            </div>
+            {% endif %}
+
         </div>
-        {% endfor %}
-    {% else %}
-    <div class="text-center text-muted mt-5">
-        <p class="h5 mb-3">🎉 You're all caught up!</p>
-        <p>You don't have any notifications yet.</p>
     </div>
-    {% endif %}
 </div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
 </body>
 </html>

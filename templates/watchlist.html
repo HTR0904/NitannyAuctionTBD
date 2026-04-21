@@ -8,127 +8,136 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
 
     <style>
-        .bg-navy { background-color: #041E42; }
-        .text-navy { color: #041E42; }
-        .btn-navy { background-color: #041E42; color: white; border: none; }
-        .box { background: white; border: 1px solid #dee2e6; border-radius: 4px; box-shadow: 0 .125rem .25rem rgba(0,0,0,.075); }
-        .small-muted { font-size: 0.85rem; color: #6c757d; }
+        :root { --navy: #041e42; --navy-soft: #153d72; --cloud: #eef3fb; }
+        body { background: linear-gradient(180deg, #f4f7fb, #ffffff); min-height: 100vh; }
+
+        /* Consistency with Dashboard Styling */
+        .bg-navy { background-color: var(--navy); }
+        .text-navy { color: var(--navy) !important; }
+        .btn-navy { background-color: var(--navy); color: white; border: none; border-radius: 8px; transition: all 0.2s; }
+        .btn-navy:hover { background-color: var(--navy-soft); color: white; }
+
+        .work-card {
+            background: white;
+            border: 0;
+            border-radius: 20px;
+            box-shadow: 0 12px 30px rgba(4, 30, 66, 0.06);
+        }
+
+        .section-header { border-left: 5px solid var(--navy); padding-left: 15px; margin-bottom: 30px; }
+
+        /* Unified Pill Styling - No clashing colors */
+        .pill {
+            display: inline-block; border-radius: 999px; padding: 0.25rem 0.85rem;
+            background: var(--cloud); color: var(--navy); font-size: 0.75rem; font-weight: 700;
+            text-transform: uppercase;
+        }
+        .pill-muted { background: #f0f0f0; color: #6c757d; }
+
+        .price-tag { font-size: 1.3rem; color: var(--navy); font-weight: 800; }
+
+        /* Navbar */
+        .navbar .nav-link { color: rgba(255,255,255,0.85) !important; }
+        .navbar .nav-link:hover { color: #fff !important; }
+        .form-control { border-radius: 8px; }
     </style>
 </head>
 
-<body class="bg-light">
+<body>
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-navy">
+<nav class="navbar navbar-expand-lg navbar-dark bg-navy mb-4">
     <div class="container">
-
         <a class="navbar-brand font-weight-bold" href="{{ url_for('bidder') }}">Nittany Auction</a>
-
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent">
             <span class="navbar-toggler-icon"></span>
         </button>
 
         <div class="collapse navbar-collapse" id="navbarContent">
-
             <form class="form-inline mx-auto my-2 my-lg-0" action="/search" method="GET">
-                <input class="form-control mr-sm-2" type="search" name="q" placeholder="Search" aria-label="Search" style="width: 350px">
-                <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Search</button>
+                <input class="form-control mr-sm-2" type="search" name="q" placeholder="Search auctions..." style="width: 300px">
             </form>
 
             <ul class="navbar-nav align-items-center">
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('bidder') }}#my-bids">View Bids</a>
-                </li>
-                <li class="nav-item mr-3">
-                    <a class="nav-link" href="/contact">Contact Us</a>
-                </li>
-
-                <li class="nav-item mr-3">
-                    <a class="nav-link position-relative" href="{{ url_for('notif.notifications') }}" title="Notifications">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="bi bi-bell" viewBox="0 0 16 16">
-                            <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6"/>
-                        </svg>
-
-                        {# Notification Badge next to Bell #}
-                        {% if unread_notifs_count > 0 %}
-                            <span class="badge badge-danger position-absolute"
-                                  style="top: 0; right: -5px; font-size: 0.65rem; padding: 2px 5px; border-radius: 50%;">
-                                {{ unread_notifs_count }}
-                            </span>
-                        {% endif %}
-                    </a>
-                </li>
+                <li class="nav-item"><a class="nav-link" href="{{ url_for('bidder') }}#my-bids">View Bids</a></li>
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle font-weight-bold text-white" href="#" id="profileDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                        {{ current_user["full_name"] if current_user else "Profile" }}
-
-                    </a>
-                    <div class="dropdown-menu dropdown-menu-right shadow-sm" aria-labelledby="profileDropdown">
+                    <a class="nav-link dropdown-toggle font-weight-bold text-white" href="#" id="profileDropdown" data-toggle="dropdown">Profile</a>
+                    <div class="dropdown-menu dropdown-menu-right shadow border-0">
                         <a class="dropdown-item" href="/settings">Account Settings</a>
-                        <a class="dropdown-item" href="/watchlist">My Watchlist</a>
-                        <a class="dropdown-item" href="{{ url_for('notif.notifications') }}">Notifications</a>
-                        <a class="dropdown-item" href="/contact">Contact Us</a>
+                        <a class="dropdown-item active bg-navy" href="/watchlist">My Watchlist</a>
                         <div class="dropdown-divider"></div>
                         <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">Logout</a>
                     </div>
                 </li>
             </ul>
-
         </div>
     </div>
 </nav>
 
-
-<div class="container mt-4">
-
-    <div class="box p-4 mb-4">
-        <h2 class="text-navy font-weight-bold mb-2">My Watchlist</h2>
-        <p class="text-muted mb-0">Keep track of the auctions you are interested in.</p>
+<div class="container mt-5">
+    <div class="section-header">
+        <h2 class="font-weight-bold text-navy mb-1">My Watchlist</h2>
+        <p class="text-muted mb-0">Tracked auctions and saved interests.</p>
     </div>
 
     {% with success_msgs = get_flashed_messages(category_filter=["watch_success"]) %}
       {% if success_msgs %}
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-4" role="alert">
             {{ success_msgs[0] }}
-            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                <span aria-hidden="true">&times;</span>
-            </button>
-        </div>
-      {% endif %}
-    {% endwith %}
-
-    {% with error_msgs = get_flashed_messages(category_filter=["watch_error"]) %}
-      {% if error_msgs %}
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            {{ error_msgs[0] }}
-            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                <span aria-hidden="true">&times;</span>
-            </button>
+            <button type="button" class="close" data-dismiss="alert">&times;</button>
         </div>
       {% endif %}
     {% endwith %}
 
     <div class="row">
         {% for item in watchlist %}
-            <div class="col-md-4 mb-4">
-                <div class="card h-100 shadow-sm border-0">
-                    <div class="card-body d-flex flex-column">
-                        <h5 class="card-title font-weight-bold text-navy">{{ item.title }}</h5>
-                        <p class="small-muted mb-1">{{ item.product_name }}</p>
-                        <p class="small-muted">{{ item.category or "Uncategorized" }}</p>
+            <div class="col-lg-4 col-md-6 mb-4">
+                <div class="work-card h-100">
+                    <div class="card-body d-flex flex-column p-4">
 
-                        <p class="mb-1 mt-2">
-                            Current bid:
-                            {% if item.current_bid > 0 %}
-                                <strong>${{ item.current_bid }}</strong>
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <span class="small text-muted font-weight-bold text-uppercase">{{ item.category or "General" }}</span>
+                            {% if item.status_code == 1 %}
+                                <span class="pill">Active</span>
+                            {% elif item.status_code == 2 %}
+                                <span class="pill pill-muted">Sold</span>
                             {% else %}
-                                <strong>No bids yet</strong>
+                                <span class="pill pill-muted">Closed</span>
                             {% endif %}
-                        </p>
+                        </div>
 
-                        <p class="mb-3">Total bids: {{ item.bid_count }}</p>
+                        <h4 class="text-navy font-weight-bold mb-1">{{ item.title }}</h4>
+                        <p class="text-muted small mb-3">{{ item.product_name }}</p>
+
+                        <div class="bg-light rounded p-3 mb-3">
+                            <div class="row">
+                                <div class="col-6">
+                                    <small class="text-muted d-block text-uppercase font-weight-bold" style="font-size: 0.6rem;">Price</small>
+                                    {% if item.current_bid > 0 %}
+                                        <span class="price-tag">${{ "%.2f"|format(item.current_bid) }}</span>
+                                    {% else %}
+                                        <span class="text-muted font-weight-bold">No Bids</span>
+                                    {% endif %}
+                                </div>
+                                <div class="col-6 text-right border-left">
+                                    <small class="text-muted d-block text-uppercase font-weight-bold" style="font-size: 0.6rem;">Seller</small>
+                                    <span class="font-weight-bold d-block text-truncate small">{{ item.seller_name }}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small class="font-weight-bold text-navy">Bid Count</small>
+                                <small class="text-muted">{{ item.bid_count }} / {{ item.max_bids }}</small>
+                            </div>
+                            <div class="progress" style="height: 6px; border-radius: 10px; background-color: var(--cloud);">
+                                <div class="progress-bar bg-navy" role="progressbar"
+                                     style="width: {{ (item.bid_count / item.max_bids * 100)|int }}%"></div>
+                            </div>
+                        </div>
 
                         <div class="mt-auto">
-                            <a class="btn btn-outline-primary btn-block mb-2 font-weight-bold"
+                            <a class="btn btn-navy btn-block font-weight-bold mb-2"
                                href="{{ url_for('auction_detail', seller_email=item.seller_email, listing_id=item.listing_id) }}">
                                 View Auction
                             </a>
@@ -136,8 +145,8 @@
                             <form action="{{ url_for('toggle_watchlist') }}" method="POST" class="m-0">
                                 <input type="hidden" name="seller_email" value="{{ item.seller_email }}">
                                 <input type="hidden" name="listing_id" value="{{ item.listing_id }}">
-                                <button type="submit" class="btn btn-warning btn-block font-weight-bold text-dark">
-                                    ★ Unwatch
+                                <button type="submit" class="btn btn-link btn-sm btn-block text-muted" style="text-decoration: none;">
+                                    <small>Remove from Watchlist</small>
                                 </button>
                             </form>
                         </div>
@@ -146,15 +155,13 @@
             </div>
         {% else %}
             <div class="col-12">
-                <div class="box p-5 text-center text-muted">
-                    <h5>You aren't watching any active auctions right now.</h5>
-                    <p>Go explore the dashboard or use the search bar to find some cool stuff.</p>
-                    <a href="{{ url_for('bidder') }}" class="btn btn-navy mt-3">Browse Auctions</a>
+                <div class="work-card p-5 text-center">
+                    <h5 class="text-muted">Your watchlist is currently empty.</h5>
+                    <a href="{{ url_for('search') }}" class="btn btn-outline-navy mt-3 px-4">Browse Auctions</a>
                 </div>
             </div>
         {% endfor %}
     </div>
-
 </div>
 
 <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>

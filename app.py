@@ -765,7 +765,6 @@ def toggle_watchlist():
 
 @app.route('/watchlist')
 def watchlist():
-    # Only logged-in bidders can view this page
     if not bidder_only():
         return redirect('/')
 
@@ -774,39 +773,57 @@ def watchlist():
     cur = db.cursor()
 
     try:
-        # Fetch all watched listings and calculate their current bid/count
+        # Fetch watched listings with seller identity and bid progress
         cur.execute("""
-                    SELECT a.Listing_ID                                          AS listing_id,
-                           a.Seller_Email                                        AS seller_email,
-                           COALESCE(NULLIF(a.Auction_Title, ''), a.Product_Name) AS title,
-                           a.Product_Name                                        AS product_name,
-                           a.Category                                            AS category,
-                           a.Status                                              AS status_code,
-                           COALESCE(MAX(b.Bid_Price), 0)                         AS current_bid,
-                           COUNT(b.Bid_Price)                                    AS bid_count
-                    FROM Auction_Listings a
-                             JOIN Watchlist w
-                                  ON a.Listing_ID = w.Listing_ID
-                             LEFT JOIN Bids b
-                                       ON b.Listing_ID = a.Listing_ID
-                                           AND b.Seller_Email = a.Seller_Email
-                    WHERE w.Bidder_Email = ?
-                    GROUP BY a.Listing_ID, a.Seller_Email, a.Auction_Title,
-                             a.Product_Name, a.Category, a.Status
-                    ORDER BY a.Status = 1 DESC, a.Listing_ID DESC
-                    """, (me,))
+            SELECT a.Listing_ID                                          AS listing_id,
+                   a.Seller_Email                                        AS seller_email,
+                   COALESCE(NULLIF(a.Auction_Title, ''), a.Product_Name) AS title,
+                   a.Product_Name                                        AS product_name,
+                   a.Category                                            AS category,
+                   a.Status                                              AS status_code,
+                   a.Max_bids                                            AS max_bids,
+                   COALESCE(MAX(b.Bid_Price), 0)                         AS current_bid,
+                   COUNT(b.Bid_ID)                                       AS bid_count,
+                   -- Determine if seller is a Local Vendor or Individual Bidder
+                   COALESCE(lv.Business_Name, bdr.first_name || ' ' || bdr.last_name) AS seller_name
+            FROM Auction_Listings a
+                     JOIN Watchlist w
+                          ON a.Listing_ID = w.Listing_ID
+                              AND a.Seller_Email = w.Seller_Email
+                     LEFT JOIN Bids b
+                               ON b.Listing_ID = a.Listing_ID
+                                   AND b.Seller_Email = a.Seller_Email
+                     LEFT JOIN Local_Vendors lv 
+                               ON a.Seller_Email = lv.Email
+                     LEFT JOIN Bidders bdr 
+                               ON a.Seller_Email = bdr.email
+            WHERE w.Bidder_Email = ?
+            GROUP BY a.Listing_ID, a.Seller_Email, a.Auction_Title,
+                     a.Product_Name, a.Category, a.Status, a.Max_bids,
+                     lv.Business_Name, bdr.first_name, bdr.last_name
+            ORDER BY a.Status = 1 DESC, a.Listing_ID DESC
+        """, (me,))
 
         watched_items = cur.fetchall()
+
+        # Added: Fetch unread notifications for the navbar badge
+        cur.execute("SELECT COUNT(*) AS count FROM Notifications WHERE user_email = ? AND is_read = 0", (me,))
+        unread_count = cur.fetchone()['count']
 
     except sql.Error as e:
         print(f"Database error fetching watchlist: {e}")
         watched_items = []
+        unread_count = 0
         flash("An error occurred while loading your watchlist.", "watch_error")
 
     finally:
         db.close()
 
-    return render_template('watchlist.html', watchlist=watched_items)
+    return render_template(
+        'watchlist.html',
+        watchlist=watched_items,
+        unread_notifs_count=unread_count
+    )
 
 @app.route('/settings')
 def settings():
