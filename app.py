@@ -290,7 +290,7 @@ def place_bid():
                             (listing_id, seller))
                 # Record Payment in Transactions
                 cur.execute("""
-                            INSERT INTO Transactions (Seller_Email, Listing_ID, Buyer_Email, Date, Payment)
+                            INSERT INTO Transactions (Seller_Email, Listing_ID, Bidder_Email, Date, Payment)
                             VALUES (?, ?, ?, date('now'), ?)
                             """, (seller, listing_id, me, price))
             else:
@@ -638,7 +638,6 @@ def watchlist():
     finally:
         db.close()
 
-    # 3. Pass the data to the template
     return render_template('watchlist.html', watchlist=watched_items)
 
 
