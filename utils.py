@@ -38,33 +38,6 @@ def init_db():
                    """)
 
     cursor.execute("""
-                   CREATE TABLE IF NOT EXISTS Chat_Threads
-                   (
-                       thread_id    INTEGER PRIMARY KEY AUTOINCREMENT,
-                       bidder_email TEXT    NOT NULL,
-                       seller_email TEXT    NOT NULL,
-                       listing_id   INTEGER NOT NULL,
-                       created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                       UNIQUE (bidder_email, seller_email, listing_id),
-                       FOREIGN KEY (bidder_email) REFERENCES User_Login (email),
-                       FOREIGN KEY (seller_email) REFERENCES User_Login (email)
-                   )
-                   """)
-
-    cursor.execute("""
-                   CREATE TABLE IF NOT EXISTS Chat_Messages
-                   (
-                       message_id   INTEGER PRIMARY KEY AUTOINCREMENT,
-                       thread_id    INTEGER NOT NULL,
-                       sender_email TEXT    NOT NULL,
-                       content      TEXT    NOT NULL,
-                       sent_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                       FOREIGN KEY (thread_id) REFERENCES Chat_Threads (thread_id) ON DELETE CASCADE,
-                       FOREIGN KEY (sender_email) REFERENCES User_Login (email)
-                   )
-                   """)
-
-    cursor.execute("""
                    CREATE TABLE IF NOT EXISTS Watchlist
                    (
                        Bidder_Email TEXT    NOT NULL,
