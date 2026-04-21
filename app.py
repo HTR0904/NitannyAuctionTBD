@@ -8,6 +8,8 @@ app = Flask(__name__)
 app.register_blueprint(auth_bp)
 app.register_blueprint(helpdesk_bp)
 app.register_blueprint(notif_bp, url_prefix='/notifications')
+with app.app_context():
+    init_db()
 
 # Allows HTML pages to be updated by refreshing without having to rerun the code
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -16,8 +18,6 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.secret_key = 'projectTBD_secret_key'
 
 host = 'http://127.0.0.1:5000/'
-
-init_db()
 
 @app.route('/')
 def index():
@@ -57,7 +57,6 @@ def change_password():
     return redirect('/settings')
 
 
-
 @app.route('/bidder')
 def bidder():
     if not bidder_only():
@@ -94,8 +93,8 @@ def bidder():
         completed_transactions=ratings,
         current_user=get_app_user(session['user_email']))
 
-@app.route('/auction/<int:listing_id>')
-def auction_detail(listing_id):
+@app.route('/auction/<seller_email>/<int:listing_id>')
+def auction_detail(seller_email, listing_id):
     if not bidder_only():
         return redirect('/')
 
@@ -103,6 +102,7 @@ def auction_detail(listing_id):
     db = db_connect()
     cur = db.cursor()
 
+    # Check if user has any saved cards
     cur.execute("""
         SELECT COUNT(*) AS total
         FROM Credit_Cards
@@ -110,6 +110,7 @@ def auction_detail(listing_id):
     """, (me,))
     card_count = cur.fetchone()['total']
 
+    # Fetch Auction Details
     cur.execute("""
         SELECT
             a.Listing_ID AS listing_id,
@@ -149,8 +150,8 @@ def auction_detail(listing_id):
                 WHERE r.Seller_Email = a.Seller_Email
             ) AS rating_count
         FROM Auction_Listings a
-        WHERE a.Listing_ID = ?
-    """, (listing_id,))
+        WHERE a.Listing_ID = ? AND a.Seller_Email = ?
+    """, (listing_id, seller_email))
     item = cur.fetchone()
 
     if item is None:
@@ -158,6 +159,7 @@ def auction_detail(listing_id):
         bidder_msg('danger', 'Auction not found.')
         return redirect(url_for('bidder'))
 
+    # Fetch Bid History
     cur.execute("""
         SELECT Bidder_Email AS bidder_email, Bid_Price AS bid_price
         FROM Bids
@@ -165,25 +167,38 @@ def auction_detail(listing_id):
           AND Listing_ID = ?
         ORDER BY Bid_Price DESC, Bid_ID ASC
         LIMIT 10
-    """, (item['seller_email'], listing_id))
+    """, (seller_email, listing_id))
     bid_history = cur.fetchall()
 
+    # Fetch the current user's highest bid for this item
     cur.execute("""
         SELECT MAX(Bid_Price) AS my_bid
         FROM Bids
         WHERE Seller_Email = ?
           AND Listing_ID = ?
           AND Bidder_Email = ?
-    """, (item['seller_email'], listing_id, me))
+    """, (seller_email, listing_id, me))
     my_bid = cur.fetchone()['my_bid']
 
+    # 5. Check Watchlist status
     cur.execute("""
-                SELECT 1
-                FROM Watchlist
-                WHERE Bidder_Email = ?
-                  AND Listing_ID = ?
-                """, (me, listing_id))
+        SELECT 1
+        FROM Watchlist
+        WHERE Bidder_Email = ?
+          AND Listing_ID = ?
+          AND Seller_Email = ?
+    """, (me, listing_id, seller_email))
     is_watching = bool(cur.fetchone())
+
+    # Check if a transaction already exists (Has the user paid?)
+    cur.execute("""
+        SELECT 1
+        FROM Transactions
+        WHERE Listing_ID = ? 
+          AND Seller_Email = ? 
+          AND Bidder_Email = ?
+    """, (listing_id, seller_email, me))
+    has_paid = bool(cur.fetchone())
 
     db.close()
 
@@ -195,9 +210,9 @@ def auction_detail(listing_id):
         my_bid=my_bid,
         card_count=card_count,
         is_watching=is_watching,
+        has_paid=has_paid,
         message=session.pop('bidder_msg', None)
     )
-
 
 @app.route('/place_bid', methods=['POST'])
 def place_bid():
@@ -206,18 +221,18 @@ def place_bid():
 
     me = session['user_email']
     listing_id = request.form.get('listing_id', type=int)
+    seller_email_input = request.form.get('seller_email')
 
     try:
         price = int(request.form.get('bid_price', ''))
     except ValueError:
         bidder_msg('danger', 'Please enter a valid whole-dollar bid.')
-        return redirect(url_for('auction_detail', listing_id=listing_id))
+        return redirect(url_for('auction_detail', seller_email=seller_email_input, listing_id=listing_id))
 
     db = db_connect()
     cur = db.cursor()
 
     try:
-        # Fetch item details
         cur.execute("""
                     SELECT Seller_Email,
                            Status,
@@ -226,7 +241,8 @@ def place_bid():
                            COALESCE(NULLIF(Auction_Title, ''), Product_Name) as title
                     FROM Auction_Listings
                     WHERE Listing_ID = ?
-                    """, (listing_id,))
+                      AND Seller_Email = ?
+                    """, (listing_id, seller_email_input))
         item = cur.fetchone()
 
         if not item or item['Status'] != 1:
@@ -236,19 +252,24 @@ def place_bid():
         seller = item['Seller_Email']
         max_allowed = item['Max_bids']
         title = item['title']
-        detail_url = url_for('auction_detail', listing_id=listing_id)
+        detail_url = url_for('auction_detail', seller_email=seller, listing_id=listing_id)
 
-        # Check for Previous High Bidder (Outbid alert)
+        # Check for Previous High Bidder
         cur.execute("""
                     SELECT Bidder_Email
                     FROM Bids
                     WHERE Listing_ID = ?
                       AND Seller_Email = ?
-                    ORDER BY Bid_Price DESC
+                    ORDER BY Bid_Price DESC, Bid_ID DESC
                     LIMIT 1
                     """, (listing_id, seller))
         prev_row = cur.fetchone()
         prev_high_bidder = prev_row['Bidder_Email'] if prev_row else None
+
+        # CONSECUTIVE BID CHECK
+        if prev_high_bidder == me:
+            bidder_msg('danger', 'You are already the highest bidder. You must wait for another bidder before bidding again.')
+            return redirect(detail_url)
 
         # Enforce the $1 increment rule
         cur.execute("""
@@ -276,23 +297,17 @@ def place_bid():
             auction_ended = True
 
             try:
-                # Clean reserve price for comparison
-                res_val = float(item['Reserve_Price'].replace('$', '').replace(',', ''))
+                # Handle cases where reserve might be stored as a string with symbols
+                res_clean = str(item['Reserve_Price']).replace('$', '').replace(',', '')
+                res_val = float(res_clean)
             except:
                 res_val = 0.0
 
             if price >= res_val:
                 reserve_met = True
-                # Auction Status -> Sold (2)
                 cur.execute("UPDATE Auction_Listings SET Status = 2 WHERE Listing_ID = ? AND Seller_Email = ?",
                             (listing_id, seller))
-                # Record Payment in Transactions
-                cur.execute("""
-                            INSERT INTO Transactions (Seller_Email, Listing_ID, Bidder_Email, Date, Payment)
-                            VALUES (?, ?, ?, date('now'), ?)
-                            """, (seller, listing_id, me, price))
             else:
-                # Auction Status -> Inactive (0)
                 cur.execute("UPDATE Auction_Listings SET Status = 0 WHERE Listing_ID = ? AND Seller_Email = ?",
                             (listing_id, seller))
         db.commit()
@@ -307,12 +322,12 @@ def place_bid():
             if auction_ended:
                 create_notification(watcher, f"Auction for '{title}' is now closed.", detail_url)
 
-        # Notify Previous Bidder
+        # Notify Previous Bidder (The one you just outbid)
         if prev_high_bidder and prev_high_bidder != me:
             create_notification(prev_high_bidder, f"You were outbid on '{title}'! Current bid: ${price}.", detail_url)
 
         if auction_ended:
-            # Notify Seller (Always notify seller when auction ends)
+            # Notify Seller
             if reserve_met:
                 create_notification(seller, f"SOLD! '{title}' hit max bids and met reserve. Sold to {me} for ${price}.",
                                     url_for('seller'))
@@ -344,7 +359,7 @@ def place_bid():
     finally:
         db.close()
 
-    return redirect(url_for('auction_detail', listing_id=listing_id))
+    return redirect(url_for('auction_detail', seller_email=seller_email_input, listing_id=listing_id))
 
 @app.route('/submit_rating', methods=['POST'])
 def submit_rating():
@@ -357,54 +372,51 @@ def submit_rating():
     stars = request.form.get('rating', type=int)
     note = request.form.get('rating_desc', '').strip()
 
-    if stars not in [1, 2, 3, 4, 5]:
-        bidder_msg('danger', 'Please choose a rating from 1 to 5.')
-        return redirect(url_for('bidder') + '#ratings')
-
     db = db_connect()
     cur = db.cursor()
 
     try:
+        # Verify payment exists
         cur.execute("""
-            SELECT 1
-            FROM Transactions
-            WHERE Seller_Email = ?
-              AND Listing_ID = ?
-              AND Bidder_Email = ?
-            LIMIT 1
-        """, (seller, listing_id, me))
+                    SELECT 1
+                    FROM Transactions
+                    WHERE Seller_Email = ?
+                      AND Listing_ID = ?
+                      AND Bidder_Email = ?
+                    """, (seller, listing_id, me))
 
-        if cur.fetchone() is None:
-            bidder_msg('danger', 'You can only rate sellers after a completed purchase.')
+        if not cur.fetchone():
+            bidder_msg('danger', 'You must complete payment before rating.')
+            return redirect(url_for('auction_detail', seller_email=seller, listing_id=listing_id))
+
+        # Check if this specific listing has already been rated by this bidder
+        # Note: Ensure your 'Ratings' table has a 'Listing_ID' column
+        cur.execute("""
+                    SELECT 1
+                    FROM Ratings
+                    WHERE Bidder_Email = ?
+                      AND Listing_ID = ?
+                    """, (me, listing_id))
+
+        if cur.fetchone():
+            bidder_msg('warning', 'You have already rated this transaction.')
         else:
+            # Insert rating with Listing_ID to keep track
             cur.execute("""
-                SELECT 1
-                FROM Ratings
-                WHERE Bidder_Email = ?
-                  AND Seller_Email = ?
-                LIMIT 1
-            """, (me, seller))
+                        INSERT INTO Ratings (Bidder_Email, Seller_Email, Listing_ID, Date, Rating, Rating_Desc)
+                        VALUES (?, ?, ?, date('now'), ?, ?)
+                        """, (me, seller, listing_id, stars, note or None))
+            db.commit()
+            bidder_msg('success', 'Rating submitted! Thanks for the feedback.')
 
-            if cur.fetchone():
-                bidder_msg('warning', 'You already rated this seller.')
-            else:
-                cur.execute("""
-                    INSERT INTO Ratings
-                        (Bidder_Email, Seller_Email, Date, Rating, Rating_Desc)
-                    VALUES (?, ?, date('now'), ?, ?)
-                """, (me, seller, stars, note or None))
-                db.commit()
-                bidder_msg('success', 'Rating submitted.')
-
-    except sql.Error as e:
+    except Exception as e:
         db.rollback()
-        print("Rating error:", e)
-        bidder_msg('danger', 'Something went wrong while saving your rating.')
-
+        print("Rating Error:", e)
+        bidder_msg('danger', 'Database error while saving rating.')
     finally:
         db.close()
 
-    return redirect(url_for('bidder') + '#ratings')
+    return redirect(url_for('auction_detail', seller_email=seller, listing_id=listing_id))
 
 @app.route('/seller')
 def seller():
@@ -412,7 +424,7 @@ def seller():
         return redirect('/')
 
     seller_email = session['user_email']
-    conn = sql.connect(DB_NAME)  # Or "dataset_tables.db" if you changed it globally
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
 
     # Skip the 'Root' root node and fetch its direct children for the starting dropdown
@@ -466,6 +478,8 @@ def seller():
         my_listings=my_listings,
         current_user=get_app_user(session['user_email']),
     )
+
+
 @app.route('/list_product', methods=['POST'])
 def list_product():
     if 'user_email' not in session or session.get('account_type') != '/seller':
@@ -510,16 +524,22 @@ def list_product():
     cursor = conn.cursor()
     try:
         formatted_price = f"${reserve_price_num:,.2f}"
+
+        # FIX: Manually calculate the next Listing_ID for this specific seller
+        cursor.execute("SELECT COALESCE(MAX(Listing_ID), 0) + 1 FROM Auction_Listings WHERE Seller_Email = ?",
+                       (seller_email,))
+        new_listing_id = cursor.fetchone()[0]
+
         cursor.execute(
             '''
             INSERT INTO Auction_Listings
-            (Seller_Email, Category, Auction_Title, Product_Name, Product_Description,
+            (Listing_ID, Seller_Email, Category, Auction_Title, Product_Name, Product_Description,
              Quantity, Reserve_Price, Max_bids, Status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
             ''',
-            (seller_email, category, auction_title, product_name, product_description, quantity_int, formatted_price, max_bids_int),
+            (new_listing_id, seller_email, category, auction_title, product_name, product_description, quantity_int,
+             formatted_price, max_bids_int),
         )
-        new_listing_id = cursor.lastrowid
         conn.commit()
         return render_seller(listing_success=f"Listing created successfully! Listing ID: {new_listing_id}")
     except sql.Error as e:
@@ -529,7 +549,153 @@ def list_product():
     finally:
         conn.close()
 
+@app.route('/checkout/<seller_email>/<int:listing_id>')
+def checkout(seller_email, listing_id):
+    if not bidder_only():
+        return redirect('/')
 
+    me = session['user_email']
+    db = db_connect()
+    cur = db.cursor()
+
+    # 1. Fetch Auction Item using the composite primary key [cite: 37]
+    cur.execute("""
+        SELECT
+            a.Listing_ID AS listing_id,
+            a.Seller_Email AS seller_email,
+            COALESCE(NULLIF(a.Auction_Title, ''), a.Product_Name) AS title,
+            a.Product_Name AS product_name,
+            a.Status AS status_code
+        FROM Auction_Listings a
+        WHERE a.Listing_ID = ? AND a.Seller_Email = ?
+    """, (listing_id, seller_email))
+    item = cur.fetchone()
+
+    # Ensure the auction is actually closed/sold (Status 2)
+    if not item or item['status_code'] != 2:
+        db.close()
+        bidder_msg('danger', 'This auction is not ready for checkout.')
+        return redirect(url_for('bidder'))
+
+    # 2. Verify User is the Winner and Get Amount Due
+    cur.execute("""
+        SELECT Bidder_Email, Bid_Price
+        FROM Bids
+        WHERE Listing_ID = ? AND Seller_Email = ?
+        ORDER BY Bid_Price DESC LIMIT 1
+    """, (listing_id, seller_email))
+    winning_bid = cur.fetchone()
+
+    if not winning_bid or winning_bid['Bidder_Email'] != me:
+        db.close()
+        bidder_msg('danger', 'You are not the winning bidder for this auction.')
+        return redirect(url_for('auction_detail', listing_id=listing_id))
+
+    amount_due = winning_bid['Bid_Price']
+
+    # Check if payment was already made (Transaction already exists)
+    cur.execute("""
+        SELECT 1 FROM Transactions
+        WHERE Listing_ID = ? AND Seller_Email = ? AND Bidder_Email = ?
+    """, (listing_id, seller_email, me))
+    if cur.fetchone():
+        db.close()
+        bidder_msg('info', 'You have already paid for this item.')
+        return redirect(url_for('auction_detail', listing_id=listing_id))
+
+    # Fetch User's Credit Cards
+    # A credit card is owned by one bidder only
+    cur.execute("""
+        SELECT credit_card_num, card_type, expire_month, expire_year
+        FROM Credit_Cards
+        WHERE Owner_email = ?
+    """, (me,))
+    cards = []
+    for row in cur.fetchall():
+        cards.append({
+            'credit_card_num': row['credit_card_num'],
+            'card_type': row['card_type'].strip(),
+            'expire_month': row['expire_month'],
+            'expire_year': row['expire_year'],
+            'last_four': row['credit_card_num'][-4:]
+        })
+
+    db.close()
+
+    return render_template(
+        'checkout.html',
+        item=item,
+        amount_due=amount_due,
+        cards=cards,
+        message=session.pop('bidder_msg', None)
+    )
+
+
+@app.route('/process_payment', methods=['POST'])
+def process_payment():
+    if not bidder_only():
+        return redirect('/')
+
+    me = session['user_email']
+    listing_id = request.form.get('listing_id', type=int)
+    seller_email = request.form.get('seller_email')
+    amount_due = request.form.get('payment_amount', type=float)
+    selected_card = request.form.get('selected_card')
+
+    db = db_connect()
+    cur = db.cursor()
+
+    try:
+        # Handle "New Card" entry
+        if selected_card == 'new':
+            card_type = request.form.get('card_type')
+            cc_num = request.form.get('credit_card_num')
+            exp_m = request.form.get('expire_month')
+            exp_y = request.form.get('expire_year')
+            cvv = request.form.get('security_code')
+
+            # Insert the new card into the database first
+            cur.execute("""
+                        INSERT INTO Credit_Cards (credit_card_num, card_type, expire_month, expire_year, security_code,
+                                                  Owner_email)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """, (cc_num, card_type, exp_m, exp_y, cvv, me))
+
+            # Use this new card for the transaction
+            selected_card = cc_num
+        else:
+            # Existing logic: Verify the selected saved card belongs to the user
+            cur.execute("""
+                        SELECT 1
+                        FROM Credit_Cards
+                        WHERE credit_card_num = ?
+                          AND Owner_email = ?
+                        """, (selected_card, me))
+
+            if not cur.fetchone():
+                bidder_msg('danger', 'Invalid payment method selected.')
+                return redirect(url_for('checkout', seller_email=seller_email, listing_id=listing_id))
+
+        # Process Transaction
+        cur.execute("""
+                    INSERT INTO Transactions (Seller_Email, Listing_ID, Bidder_Email, Date, Payment)
+                    VALUES (?, ?, ?, date('now'), ?)
+                    """, (seller_email, listing_id, me, amount_due))
+
+        db.commit()
+        bidder_msg('success', 'Payment successful! Transaction complete.')
+        create_notification(seller_email, f"Payment of ${amount_due} received from {me} for listing #{listing_id}.",
+                            url_for('seller'))
+
+    except Exception as e:
+        db.rollback()
+        print(f"Payment Error: {e}")
+        bidder_msg('danger', 'A database error occurred during payment.')
+    finally:
+        db.close()
+
+    # FIX: Added seller_email to the redirect
+    return redirect(url_for('auction_detail', seller_email=seller_email, listing_id=listing_id))
 @app.route('/contact')
 def contact():
     if 'user_email' not in session:
@@ -784,7 +950,7 @@ def get_subcategories():
     if not parent:
         return jsonify({"subcategories": []})
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
 
     # Query ONLY the direct children of the requested parent
@@ -796,6 +962,7 @@ def get_subcategories():
 
 
 @app.route('/search')
+@app.route('/search')
 def search():
     if 'user_email' not in session:
         return redirect('/')
@@ -806,7 +973,7 @@ def search():
     max_price = request.args.get('max_price', '').strip()
     price_type = request.args.get('price_type', 'reserve')  # Default to starting price
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
 
     # Skip the 'Root' root node and fetch its direct children as our starting point
@@ -893,6 +1060,7 @@ def search():
     # Main Query Assembly
     sql_query = '''
                 SELECT al.Listing_ID, \
+                       al.Seller_Email, \
                        al.Auction_Title, \
                        al.Product_Name, \
                        al.Category, \
@@ -922,12 +1090,13 @@ def search():
     for row in cursor.fetchall():
         results.append({
             'listing_id': row[0],
-            'auction_title': row[1],
-            'product_name': row[2],
-            'category': row[3],
-            'reserve_price': row[4],
-            'bid_count': row[5],
-            'current_bid': row[6]
+            'seller_email': row[1],
+            'auction_title': row[2],
+            'product_name': row[3],
+            'category': row[4],
+            'reserve_price': row[5],
+            'bid_count': row[6],
+            'current_bid': row[7]
         })
 
     conn.close()
@@ -935,7 +1104,7 @@ def search():
     return render_template('search.html',
                            results=results,
                            top_categories=top_categories,
-                           breadcrumbs=breadcrumbs,  # <-- THIS WAS THE MISSING LINK!
+                           breadcrumbs=breadcrumbs,
                            query=query,
                            selected_category=selected_category,
                            min_price=min_price,
@@ -951,7 +1120,7 @@ def chats_list():
 
     user_email = session['user_email']
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
 
     cursor.execute('''
@@ -1007,7 +1176,7 @@ def chat_view(thread_id):
 
     user_email = session['user_email']
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
 
     #security check
@@ -1098,7 +1267,7 @@ def chat_start(seller_email, listing_id):
         flash("You cannot chat with yourself.", "chat_error")
         return redirect('/chats')
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
 
     #exist?
@@ -1130,7 +1299,7 @@ def chat_delete(thread_id):
 
     user_email = session['user_email']
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
 
     #security

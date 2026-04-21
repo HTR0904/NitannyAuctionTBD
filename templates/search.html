@@ -127,7 +127,7 @@
                         <div class="col-md-8">
 
                             <h5 class="mb-1">
-                                <a href="/auction/{{ item.listing_id }}" class="text-navy text-decoration-none">
+                                <a href="/auction/{{ item.seller_email }}/{{ item.listing_id }}" class="text-navy text-decoration-none">
                                     {{ item.auction_title }}
                                 </a>
                             </h5>
@@ -164,7 +164,8 @@
     </form>
 </div>
 
-<script src="https://code.jquery.com/jquery-3.4.1.min.js" crossorigin="anonymous"></script> <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" crossorigin="anonymous"></script>
+<script src="https://code.jquery.com/jquery-3.4.1.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" crossorigin="anonymous"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" crossorigin="anonymous"></script>
 
 <script>

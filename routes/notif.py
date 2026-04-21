@@ -10,7 +10,7 @@ def notifications():
 
     user_email = session['user_email']
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
 
     cursor.execute('''
@@ -43,7 +43,7 @@ def mark_read(notif_id):
     if 'user_email' not in session:
         return redirect(url_for('index'))
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     #only marrk self noti
     cursor.execute(
@@ -60,7 +60,7 @@ def mark_all_read():
     if 'user_email' not in session:
         return redirect(url_for('index'))
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute(
         "UPDATE Notifications SET is_read = 1 WHERE user_email = ?",
@@ -75,7 +75,7 @@ def delete(notif_id):
     if 'user_email' not in session:
         return redirect(url_for('index'))
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
 
     cursor.execute(
@@ -91,7 +91,7 @@ def delete_all():
     if 'user_email' not in session:
         return redirect(url_for('index'))
 
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute(
         "DELETE FROM Notifications WHERE user_email = ?",

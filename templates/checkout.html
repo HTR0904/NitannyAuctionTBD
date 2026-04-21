@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Checkout - {{ item.title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+    <style>
+        .bg-navy { background-color: #041E42; }
+        .text-navy { color: #041E42; }
+        .btn-navy { background-color: #041E42; color: white; border: none; }
+        .box { background: white; border: 1px solid #dee2e6; border-radius: 4px; box-shadow: 0 .125rem .25rem rgba(0,0,0,.075); }
+        .card-option { cursor: pointer; transition: background 0.2s; position: relative; }
+        .card-option:hover { background-color: #f8f9fa !important; }
+        /* Highlighting the selected option */
+        input[type="radio"]:checked + .card-label { font-weight: bold; color: #041E42; }
+    </style>
+</head>
+
+<body class="bg-light">
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-navy">
+    <div class="container">
+        <a class="navbar-brand font-weight-bold" href="{{ url_for('bidder') }}">Nittany Auction</a>
+    </div>
+</nav>
+
+<div class="container mt-5 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+
+            {% if message %}
+                <div class="alert alert-{{ message.kind }}">{{ message.text }}</div>
+            {% endif %}
+
+            <div class="box p-4">
+                <h2 class="text-navy font-weight-bold mb-4">Secure Checkout</h2>
+
+                <h5 class="border-bottom pb-2">Order Summary</h5>
+                <div class="row mb-3 mt-3">
+                    <div class="col-sm-8">
+                        <p class="mb-1"><strong>{{ item.title }}</strong></p>
+                        <p class="small text-muted mb-0">Seller: {{ item.seller_email }}</p>
+                    </div>
+                    <div class="col-sm-4 text-right">
+                        <h4 class="text-success">${{ amount_due }}</h4>
+                    </div>
+                </div>
+
+                <h5 class="border-bottom pb-2 mt-4">Payment Method</h5>
+                <form action="{{ url_for('process_payment') }}" method="POST" id="checkout-form">
+
+                    <input type="hidden" name="listing_id" value="{{ item.listing_id }}">
+                    <input type="hidden" name="seller_email" value="{{ item.seller_email }}">
+                    <input type="hidden" name="payment_amount" value="{{ amount_due }}">
+
+                    {% if cards %}
+                        <div class="form-group">
+                            <label class="d-block mb-3 text-muted">Select a payment method:</label>
+
+                            {% for card in cards %}
+                            <div class="custom-control custom-radio border rounded p-3 mb-2 card-option">
+                                <input type="radio" id="card_{{ loop.index }}" name="selected_card" value="{{ card.credit_card_num }}" class="custom-control-input card-selector" required>
+                                <label class="custom-control-label w-100 card-label" for="card_{{ loop.index }}">
+                                    {{ card.card_type }} ending in {{ card.last_four }}
+                                    <span class="float-right text-muted small">Exp: {{ card.expire_month }}/{{ card.expire_year }}</span>
+                                </label>
+                            </div>
+                            {% endfor %}
+
+                            <div class="custom-control custom-radio border rounded p-3 mb-2 card-option">
+                                <input type="radio" id="card_new" name="selected_card" value="new" class="custom-control-input card-selector">
+                                <label class="custom-control-label w-100 card-label" for="card_new">
+                                    + Use a new credit card
+                                </label>
+                            </div>
+                        </div>
+                    {% else %}
+                        <input type="hidden" name="selected_card" value="new">
+                    {% endif %}
+
+                    <div id="new-card-details" class="mt-4 p-4 border rounded bg-light" style="{% if cards %}display: none;{% endif %}">
+                        <h6 class="font-weight-bold mb-3">Enter Card Information</h6>
+                        <div class="form-row">
+                            <div class="form-group col-md-4">
+                                <label>Card Type</label>
+                                <select name="card_type" class="form-control card-input">
+                                    <option value="Visa">Visa</option>
+                                    <option value="Master">Mastercard</option>
+                                    <option value="Amex">Amex</option>
+                                    <option value="Discover">Discover</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-8">
+                                <label>Card Number</label>
+                                <input type="text" name="credit_card_num" class="form-control card-input"
+                                       placeholder="1234-5678-9012-3456" pattern="\d{4}-\d{4}-\d{4}-\d{4}">
+                                <small class="text-muted">Format: 1111-2222-3333-4444</small>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group col-md-4">
+                                <label>Exp Month</label>
+                                <input type="number" name="expire_month" class="form-control card-input" min="1" max="12" placeholder="MM">
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label>Exp Year</label>
+                                <input type="number" name="expire_year" class="form-control card-input" min="2025" max="2040" placeholder="YYYY">
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label>CVV</label>
+                                <input type="number" name="security_code" class="form-control card-input" min="100" max="9999" placeholder="123">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-navy btn-block btn-lg mt-4 font-weight-bold shadow-sm">
+                        Confirm & Pay ${{ amount_due }}
+                    </button>
+                </form>
+
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('auction_detail', seller_email=item.seller_email, listing_id=item.listing_id) }}" class="text-muted small">Cancel and return</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    // Function to handle the toggling of input fields
+    function toggleCardInputs() {
+        const selectedValue = $('input[name="selected_card"]:checked').val();
+
+        if (selectedValue === 'new') {
+            $('#new-card-details').stop().slideDown();
+            $('.card-input').prop('required', true); // Make inputs required
+        } else {
+            $('#new-card-details').stop().slideUp();
+            $('.card-input').prop('required', false); // Remove requirement
+        }
+    }
+
+    // Trigger on change
+    $('.card-selector').on('change', function() {
+        toggleCardInputs();
+    });
+
+    // Run once on load to set initial state (e.g., if no cards exist)
+    const hasCards = {{ 'true' if cards else 'false' }};
+    if (!hasCards) {
+        $('.card-input').prop('required', true);
+    }
+});
+</script>
+
+</body>
+</html>

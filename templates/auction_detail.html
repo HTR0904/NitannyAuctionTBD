@@ -49,7 +49,6 @@
                             <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6"/>
                         </svg>
 
-                        {# Notification Badge next to Bell #}
                         {% if unread_notifs_count > 0 %}
                             <span class="badge badge-danger position-absolute"
                                   style="top: 0; right: -5px; font-size: 0.65rem; padding: 2px 5px; border-radius: 50%;">
@@ -84,7 +83,7 @@
     {% endif %}
 
     <div class="box p-4 mb-4">
-        <a href="{{ url_for('search') }}" class="small-muted">&larr; Back to search</a>
+        <a href="{{ url_for('bidder') }}" class="small-muted">&larr; Back to Home</a>
 
         <h1 class="text-navy font-weight-bold mt-2">{{ item.title }}</h1>
         <p class="lead text-muted">{{ item.product_name }}</p>
@@ -127,7 +126,10 @@
                         <p><strong>Your highest bid:</strong> ${{ my_bid }}</p>
                     {% endif %}
 
+                    <hr>
+
                     {% if item.status_code == 1 %}
+                        {# STATUS 1: AUCTION IS ACTIVE #}
                         {% if card_count == 0 %}
                             <div class="alert alert-warning">
                                 You need a saved credit card before placing a bid.
@@ -139,6 +141,7 @@
                         {% else %}
                             <form action="{{ url_for('place_bid') }}" method="POST">
                                 <input type="hidden" name="listing_id" value="{{ item.listing_id }}">
+                                <input type="hidden" name="seller_email" value="{{ item.seller_email }}">
 
                                 <div class="form-group">
                                     <label>Your Bid</label>
@@ -153,28 +156,53 @@
                                 <button class="btn btn-navy btn-block" type="submit">Place Bid</button>
                             </form>
                         {% endif %}
+
+                        <form action="{{ url_for('toggle_watchlist') }}" method="POST" class="d-inline">
+                            <input type="hidden" name="seller_email" value="{{ item.seller_email }}">
+                            <input type="hidden" name="listing_id" value="{{ item.listing_id }}">
+
+                            {% if is_watching %}
+                                <button type="submit" class="btn btn-warning btn-block mt-3 font-weight-bold text-dark">
+                                    ★ Watching
+                                </button>
+                            {% else %}
+                                <button type="submit" class="btn btn-outline-secondary btn-block mt-3 font-weight-bold">
+                                    ☆ Add to Watchlist
+                                </button>
+                            {% endif %}
+                        </form>
+
                     {% elif item.status_code == 2 %}
-                        <div class="alert alert-success font-weight-bold">
-                            Max bids reached.
+                        {# STATUS 2: AUCTION MAX BIDS REACHED & SOLD #}
+                        <div class="alert alert-success font-weight-bold text-center">
+                            Auction Ended: Item Sold
                         </div>
-                    {% else %}
-                        <div class="alert alert-secondary">This auction is closed.</div>
-                    {% endif %}
 
-                    <form action="{{ url_for('toggle_watchlist') }}" method="POST" class="d-inline">
-                        <input type="hidden" name="seller_email" value="{{ item.seller_email }}">
-                        <input type="hidden" name="listing_id" value="{{ item.listing_id }}">
+                        {# Check if the current user is the highest bidder #}
+                        {% if my_bid == item.current_bid and my_bid > 0 %}
+                            <div class="alert alert-info text-center">
+                                <strong>Congratulations!</strong> You won this auction.
+                            </div>
 
-                        {% if is_watching %}
-                            <button type="submit" class="btn btn-warning btn-block mt-3 font-weight-bold text-dark">
-                                ★ Watching
-                            </button>
-                        {% else %}
-                            <button type="submit" class="btn btn-outline-secondary btn-block mt-3 font-weight-bold">
-                                ☆ Add to Watchlist
-                            </button>
+                            {% if has_paid %}
+                                {# User has paid - Show Rate Modal Button #}
+                                <button type="button" class="btn btn-navy btn-block btn-lg font-weight-bold" data-toggle="modal" data-target="#ratingModal">
+                                    Rate Seller
+                                </button>
+                            {% else %}
+                                {# User hasn't paid - Show Checkout button #}
+                                <a href="{{ url_for('checkout', seller_email=item.seller_email, listing_id=item.listing_id) }}" class="btn btn-success btn-block btn-lg font-weight-bold">
+                                    Proceed to Payment
+                                </a>
+                            {% endif %}
                         {% endif %}
-                    </form>
+
+                    {% elif item.status_code == 0 %}
+                        {# STATUS 0: AUCTION CLOSED / RESERVE NOT MET #}
+                        <div class="alert alert-secondary font-weight-bold text-center">
+                            Auction Ended: Reserve Price Not Met
+                        </div>
+                    {% endif %}
 
                     {% with success_msgs = get_flashed_messages(category_filter=["watch_success"]) %}
                       {% if success_msgs %}
@@ -187,17 +215,7 @@
                       {% endif %}
                     {% endwith %}
 
-                    {% with error_msgs = get_flashed_messages(category_filter=["watch_error"]) %}
-                      {% if error_msgs %}
-                        <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
-                            {{ error_msgs[0] }}
-                            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
-                        </div>
-                      {% endif %}
-                    {% endwith %}
-                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -230,6 +248,45 @@
         </div>
     </div>
 
+</div>
+
+<div class="modal fade" id="ratingModal" tabindex="-1" role="dialog" aria-labelledby="ratingModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-navy text-white">
+                <h5 class="modal-title" id="ratingModalLabel">Rate Seller: {{ item.seller_email }}</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form action="{{ url_for('submit_rating') }}" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="seller_email" value="{{ item.seller_email }}">
+                    <input type="hidden" name="listing_id" value="{{ item.listing_id }}">
+
+                    <div class="form-group">
+                        <label class="font-weight-bold">How many stars?</label>
+                        <select name="rating" class="form-control" required>
+                            <option value="5">5 Stars - Excellent</option>
+                            <option value="4">4 Stars - Good</option>
+                            <option value="3">3 Stars - Average</option>
+                            <option value="2">2 Stars - Poor</option>
+                            <option value="1">1 Star - Very Poor</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="font-weight-bold">Optional Feedback</label>
+                        <textarea name="rating_desc" class="form-control" rows="3" placeholder="Describe your experience with this seller..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-navy">Submit Rating</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>

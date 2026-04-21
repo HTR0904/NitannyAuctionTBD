@@ -2,11 +2,13 @@ import hashlib
 import sqlite3 as sql
 import zipfile
 import io
+import os
 import csv
 from xml.sax.saxutils import escape
 from flask import session
 
-DB_NAME = "dataset_tables.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.path.join(BASE_DIR, "dataset_tables.db")
 DEFAULT_HELPDESK_EMAIL = "helpdeskteam@lsu.edu"
 REQUEST_STATUS = {
     0: "Open",
@@ -19,7 +21,7 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def init_db():
-    conn = sql.connect("dataset_tables.db")
+    conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS Notifications (
@@ -70,11 +72,35 @@ def init_db():
         )
     """)
 
+    cursor.execute("""
+                   CREATE TABLE IF NOT EXISTS Ratings
+                   (
+                       Rating_ID    INTEGER PRIMARY KEY AUTOINCREMENT,
+                       Bidder_Email TEXT    NOT NULL,
+                       Seller_Email TEXT    NOT NULL,
+                       Date         DATE    NOT NULL,
+                       Rating       INTEGER NOT NULL,
+                       Rating_Desc  TEXT,
+                       FOREIGN KEY (Bidder_Email) REFERENCES User_Login (email),
+                       FOREIGN KEY (Seller_Email) REFERENCES User_Login (email)
+                   )
+                   """)
+
+    # Add Listing_ID as a regular column to Ratings if it doesn't exist
+    cursor.execute("PRAGMA table_info(Ratings)")
+    columns = [col[1] for col in cursor.fetchall()]
+
+    if 'Listing_ID' not in columns:
+        print("Adding Listing_ID column to Ratings...")
+        try:
+            cursor.execute("ALTER TABLE Ratings ADD COLUMN Listing_ID INTEGER")
+        except sql.Error as e:
+            print(f"Migration error: {e}")
     conn.commit()
     conn.close()
 
 def create_notification(user_email, content, link=None):
-    conn = sql.connect("dataset_tables.db", timeout=20)
+    conn = sql.connect(DB_NAME, timeout=20)
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO Notifications (user_email, content, link) VALUES (?, ?, ?)",
@@ -86,7 +112,7 @@ def create_notification(user_email, content, link=None):
 # Bidder ##############################################
 
 def db_connect():
-    db = sql.connect("dataset_tables.db")
+    db = sql.connect(DB_NAME)
     db.row_factory = sql.Row
     return db
 
