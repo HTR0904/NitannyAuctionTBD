@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, session, redirect, url_for, request
+import uuid
 from utils import *
 auth_bp = Blueprint('auth', __name__)
 
@@ -107,6 +108,7 @@ def login_helpdesk():
     conn.close()
     return render_template('login.html', error="Not a helpdesk account")
 
+
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'GET':
@@ -116,46 +118,68 @@ def register():
     email = request.form.get('email', '').strip().lower()
     password = request.form.get('password')
     confirm_password = request.form.get('confirm_password')
-    first_name = request.form.get('first_name', '').strip()
-    last_name = request.form.get('last_name', '').strip()
-    age = request.form.get('age')
-    major = request.form.get('major', '').strip() or None
-    street_num = request.form.get('street_num')
-    street_name = request.form.get('street_name', '').strip()
-    zipcode = request.form.get('zipcode')
-    bank_routing = request.form.get('bank_routing_number', '').strip()
-    bank_account = request.form.get('bank_account_number')
 
-    if not email or not password or not first_name or not last_name:
+    if not email or not password or not role:
         return render_template('register.html', error="Please fill out all required fields.")
+
     if password != confirm_password:
         return render_template('register.html', error="Passwords do not match.")
+
     if len(password) < 6:
         return render_template('register.html', error="Password must be at least 6 characters.")
-    if role not in ('bidder', 'seller'):
-        return render_template('register.html', error="Invalid account type selected.")
-    if role == 'seller' and (not bank_routing or not bank_account):
-        return render_template('register.html', error="Sellers must provide banking information.")
 
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT email FROM User_Login WHERE email = ?", (email,))
         if cursor.fetchone():
-            return render_template('register.html', error="This email is already registered. Please log in instead.")
+            return render_template('register.html', error="This email is already registered.")
+
+        if role == 'helpdesk':
+            # NEW: Grab the position from the form data, with a fallback if empty
+            position = request.form.get('position', '').strip() or 'Helpdesk Staff'
+
+            cursor.execute("INSERT INTO User_Login (email, password_hash) VALUES (?, ?)",
+                           (email, hash_password(password)))
+            cursor.execute(
+                '''
+                INSERT INTO Requests (sender_email, helpdesk_staff_email, request_type, request_desc, request_status)
+                VALUES (?, ?, ?, ?, ?)
+                ''',
+                # UPDATED: Pass the dynamic 'position' variable instead of the hardcoded string
+                (email, DEFAULT_HELPDESK_EMAIL, 'Registration', position, 0),
+            )
+            conn.commit()
+            return render_template('register.html',
+                                   success="Staff registration submitted! Please wait for admin approval.")
+
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
+
+        if not first_name or not last_name:
+            return render_template('register.html', error="Names are required for bidders and sellers.")
+
+        if role == 'seller':
+            bank_routing = request.form.get('bank_routing_number', '').strip()
+            bank_account = request.form.get('bank_account_number')
+            if not bank_routing or not bank_account:
+                return render_template('register.html', error="Sellers must provide banking information.")
+
+        age = request.form.get('age')
+        major = request.form.get('major', '').strip() or None
+        street_num = request.form.get('street_num')
+        street_name = request.form.get('street_name', '').strip()
+        zipcode = request.form.get('zipcode')
 
         home_address_id = None
         if street_num and street_name and zipcode:
             cursor.execute("SELECT zipcode FROM Zipcode_Info WHERE zipcode = ?", (zipcode,))
             if not cursor.fetchone():
-                return render_template('register.html', error=f"Zipcode {zipcode} is not recognized in our system.")
+                return render_template('register.html', error=f"Zipcode {zipcode} is not recognized.")
 
             home_address_id = uuid.uuid4().hex
             cursor.execute(
-                '''
-                INSERT INTO Address (address_id, zipcode, street_num, street_name)
-                VALUES (?, ?, ?, ?)
-                ''',
+                "INSERT INTO Address (address_id, zipcode, street_num, street_name) VALUES (?, ?, ?, ?)",
                 (home_address_id, zipcode, street_num, street_name),
             )
 
@@ -180,9 +204,9 @@ def register():
         conn.commit()
         ensure_app_user(email, role)
         return render_template('register.html', success=f"Account created successfully as a {role}!")
+
     except sql.Error as e:
         conn.rollback()
-        print(f"Registration database error: {e}")
-        return render_template('register.html', error="A database error occurred. Please try again.")
+        return render_template('register.html', error="A database error occurred.")
     finally:
         conn.close()

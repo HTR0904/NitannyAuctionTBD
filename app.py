@@ -1,7 +1,6 @@
 from flask import Flask, flash, render_template, request, redirect, url_for, jsonify
 from utils import *
 import sqlite3 as sql
-import uuid
 from routes.auth import auth_bp
 from routes.helpdesk import helpdesk_bp
 from routes.notif import notif_bp

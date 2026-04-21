@@ -35,6 +35,10 @@
 
         .work-card table td { vertical-align: middle !important; padding: 1.1rem 0.75rem !important; }
         .ticket-subject { line-height: 1.4; display: block; margin-bottom: 4px; }
+
+        .btn-success { background-color: #28a745; border: none; }
+        .btn-outline-danger { color: #dc3545; border: 1px solid #dc3545; background: transparent; }
+        .btn-outline-danger:hover { background-color: #dc3545; color: white; }
     </style>
 </head>
 <body>
@@ -48,9 +52,9 @@
         <div class="collapse navbar-collapse" id="helpdeskNav">
             <ul class="navbar-nav ml-4">
                 <li class="nav-item"><a class="nav-link" href="#admin-actions">Manage Users</a></li>
+                <li class="nav-item"><a class="nav-link" href="#registration-requests">Registration Queue</a></li>
                 <li class="nav-item"><a class="nav-link" href="#categories">Categories</a></li>
                 <li class="nav-item"><a class="nav-link" href="#incoming-tickets">Incoming</a></li>
-                <li class="nav-item"><a class="nav-link" href="#active-tickets">My Tickets</a></li>
             </ul>
         </div>
         <div class="ml-auto d-flex align-items-center text-white">
@@ -79,13 +83,13 @@
             <div class="col-lg-7">
                 <span class="badge badge-warning text-navy px-3 py-2 mb-3">Admin Control Center</span>
                 <h1 class="display-4 font-weight-bold">Helpdesk Workspace</h1>
-                <p class="lead mb-0">Complete oversight of user access, hierarchical categories, and partitioned ticket processing.</p>
+                <p class="lead mb-0">Unified management for staff approvals, ticket moderation, and category hierarchy.</p>
             </div>
             <div class="col-lg-5 mt-4 mt-lg-0">
                 <div class="bg-white text-dark rounded p-4">
                     <div class="small text-muted text-uppercase font-weight-bold">Export center</div>
                     <h4 class="font-weight-bold mt-2">Data Reporting</h4>
-                    <p class="text-muted">Download full joined helpdesk records.</p>
+                    <p class="text-muted">Download joined helpdesk records.</p>
                     <a href="/helpdesk/export/csv" class="btn btn-outline-dark mr-2">Export CSV</a>
                     <a href="/helpdesk/export/xlsx" class="btn btn-navy">Export XLSX</a>
                 </div>
@@ -99,7 +103,7 @@
         </div>
         <div class="row">
             <div class="col-lg-7 border-right">
-                <h5 class="font-weight-bold text-navy mb-3">Create New Account</h5>
+                <h5 class="font-weight-bold text-navy mb-3">Direct Account Creation</h5>
                 <form action="/helpdesk/create_account" method="POST">
                     <div class="form-row">
                         <div class="form-group col-md-3">
@@ -164,10 +168,44 @@
         </div>
     </div>
 
+    <div class="work-card p-4 mb-4" id="registration-requests">
+        <div class="section-header">
+            <h3 class="font-weight-bold mb-0">Staff Registration Approval Queue</h3>
+        </div>
+        <div class="table-wrap">
+            <table class="table table-hover">
+                <thead class="thead-light"><tr><th>ID</th><th>Applicant Email</th><th>Proposed Position</th><th>Date Requested</th><th>Action</th></tr></thead>
+                <tbody>
+                {% for ticket in tickets if ticket["category_name"] == "Registration" and ticket["status_code"] == 0 %}
+                    <tr>
+                        <td class="font-weight-bold">#{{ ticket["id"] }}</td>
+                        <td>{{ ticket["sender_email"] }}</td>
+                        <td><span class="pill text-capitalize">{{ ticket["description"] }}</span></td>
+                        <td><small class="text-muted">Pending Review</small></td>
+                        <td>
+                            <div class="d-flex ticket-tools">
+                                <form action="/helpdesk/approve_registration/{{ ticket['id'] }}" method="POST" class="mr-2">
+                                    <button type="submit" class="btn btn-sm btn-success px-4">Approve Staff Member</button>
+                                </form>
+                                <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST">
+                                    <input type="hidden" name="status" value="Closed">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Decline</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="5" class="text-center py-5 text-muted">There are currently no staff registration requests awaiting approval.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <div class="row">
         <div class="col-lg-4 mb-4">
             <div class="work-card p-4 h-100" id="categories">
-                <h3 class="font-weight-bold mb-3">Categories</h3>
+                <h3 class="font-weight-bold mb-3">Category Hierarchy</h3>
                 <form action="/helpdesk/create_category" method="POST" class="mb-4">
                     <div class="form-group" id="category-container">
                         <select class="form-control dynamic-category mb-2">
@@ -178,7 +216,7 @@
                         </select>
                         <input type="hidden" name="existing_parent" id="final_category_input" value="Root">
                     </div>
-                    <input type="text" class="form-control mb-3" name="child_category" placeholder="New category name" required>
+                    <input type="text" class="form-control mb-3" name="child_category" placeholder="New child name" required>
                     <button type="submit" class="btn btn-navy btn-block">Add Category</button>
                 </form>
                 <div class="table-wrap">
@@ -223,35 +261,28 @@
 
         <div class="col-lg-8">
             <div class="work-card p-4 mb-4" id="incoming-tickets">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h3 class="font-weight-bold mb-0">Incoming Requests</h3>
-                </div>
+                <h3 class="font-weight-bold mb-4">Unassigned General Support</h3>
                 <div class="table-wrap">
                     <table class="table table-hover">
-                        <thead class="thead-light"><tr><th>ID</th><th>Sender</th><th>Subject</th><th>Category</th><th>Action</th></tr></thead>
+                        <thead class="thead-light"><tr><th>ID</th><th>Sender</th><th>Subject</th><th>Action</th></tr></thead>
                         <tbody>
-                        {% for ticket in tickets if ticket["is_unassigned"] %}
+                        {% for ticket in tickets if ticket["is_unassigned"] and ticket["category_name"] != "Registration" %}
                             <tr>
                                 <td class="font-weight-bold">#{{ ticket["id"] }}</td>
                                 <td><small class="text-muted">{{ ticket["sender_email"] }}</small></td>
                                 <td>
                                     <strong class="ticket-subject">{{ ticket["subject"] }}</strong>
-                                    <small class="text-muted d-block">{{ ticket["description"] }}</small>
+                                    <small class="text-muted d-block text-truncate" style="max-width: 250px;">{{ ticket["description"] }}</small>
                                 </td>
-                                <td><span class="pill">{{ ticket["category_name"] }}</span></td>
                                 <td>
-                                    <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" class="d-flex align-items-center flex-wrap ticket-tools">
-                                        <button type="submit" class="btn btn-sm btn-outline-navy mr-2 my-1" name="assign_to_me" value="1">Assign to me</button>
-                                        <select class="form-control form-control-sm mr-2 my-1" name="status">
-                                            <option {% if ticket["status"] == "Open" %}selected{% endif %}>Open</option>
-                                            <option {% if ticket["status"] == "In Progress" %}selected{% endif %}>In Progress</option>
-                                        </select>
-                                        <button type="submit" class="btn btn-sm btn-navy my-1">Save</button>
+                                    <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" class="d-flex align-items-center ticket-tools">
+                                        <button type="submit" class="btn btn-sm btn-outline-navy mr-2" name="assign_to_me" value="1">Claim</button>
+                                        <button type="submit" class="btn btn-sm btn-navy">Save</button>
                                     </form>
                                 </td>
                             </tr>
                         {% else %}
-                            <tr><td colspan="5" class="text-center py-5 text-muted">No new unassigned tickets.</td></tr>
+                            <tr><td colspan="4" class="text-center py-5 text-muted">No unassigned general tickets.</td></tr>
                         {% endfor %}
                         </tbody>
                     </table>
@@ -259,35 +290,29 @@
             </div>
 
             <div class="work-card p-4 mb-4" id="active-tickets">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h3 class="font-weight-bold mb-0">My Tickets</h3>
-                </div>
+                <h3 class="font-weight-bold mb-4">My Active Cases</h3>
                 <div class="table-wrap">
                     <table class="table table-hover">
-                        <thead class="thead-light"><tr><th>ID</th><th>Sender</th><th>Subject</th><th>Category</th><th>Action</th></tr></thead>
+                        <thead class="thead-light"><tr><th>ID</th><th>Sender</th><th>Category</th><th>Status</th><th>Action</th></tr></thead>
                         <tbody>
-                        {% for ticket in tickets if ticket["assigned_email"] == current_user["email"] %}
+                        {% for ticket in tickets if ticket["assigned_email"] == current_user["email"] and ticket["category_name"] != "Registration" %}
                             <tr>
                                 <td class="font-weight-bold">#{{ ticket["id"] }}</td>
                                 <td><small class="text-muted">{{ ticket["sender_email"] }}</small></td>
-                                <td>
-                                    <strong class="ticket-subject">{{ ticket["subject"] }}</strong>
-                                    <small class="text-muted d-block">{{ ticket["description"] }}</small>
-                                </td>
                                 <td><span class="pill">{{ ticket["category_name"] }}</span></td>
                                 <td>
-                                    <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" class="d-flex align-items-center flex-wrap ticket-tools">
-                                        <select class="form-control form-control-sm mr-2 my-1" name="status">
+                                    <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" class="d-flex align-items-center ticket-tools">
+                                        <select class="form-control form-control-sm mr-2" name="status">
                                             <option {% if ticket["status"] == "Open" %}selected{% endif %}>Open</option>
                                             <option {% if ticket["status"] == "In Progress" %}selected{% endif %}>In Progress</option>
                                             <option {% if ticket["status"] == "Closed" %}selected{% endif %}>Closed</option>
                                         </select>
-                                        <button type="submit" class="btn btn-sm btn-navy my-1">Update</button>
+                                        <button type="submit" class="btn btn-sm btn-navy">Update</button>
                                     </form>
                                 </td>
                             </tr>
                         {% else %}
-                            <tr><td colspan="5" class="text-center py-5 text-muted">No active tickets assigned to you.</td></tr>
+                            <tr><td colspan="5" class="text-center py-5 text-muted">You are not currently assigned to any active support cases.</td></tr>
                         {% endfor %}
                         </tbody>
                     </table>
@@ -297,13 +322,13 @@
     </div>
 
     <div class="work-card p-4" id="user-directory">
-        <h3 class="font-weight-bold mb-3">User Directory</h3>
+        <h3 class="font-weight-bold mb-3">Global User Directory</h3>
         <div class="table-wrap">
             <table class="table table-hover">
-                <thead class="thead-light"><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
+                <thead class="thead-light"><tr><th>Name</th><th>Email</th><th>Role</th><th>System Status</th></tr></thead>
                 <tbody>
                 {% for user in users %}
-                    <tr><td>{{ user["full_name"] }}</td><td>{{ user["email"] }}</td><td class="text-capitalize">{{ user["role"] }}</td><td>{{ user["user_status"] }}</td></tr>
+                    <tr><td>{{ user["full_name"] }}</td><td>{{ user["email"] }}</td><td class="text-capitalize">{{ user["role"] }}</td><td><span class="badge badge-light px-2 py-1">{{ user["user_status"] }}</span></td></tr>
                 {% endfor %}
                 </tbody>
             </table>

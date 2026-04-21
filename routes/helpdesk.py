@@ -1,19 +1,7 @@
 from datetime import datetime
 from flask import Blueprint, flash, redirect, render_template, request, send_file, session, url_for
 
-from utils import (
-    DEFAULT_HELPDESK_EMAIL,
-    build_csv_bytes,
-    build_export_rows,
-    build_xlsx_bytes,
-    collect_helpdesk_context,
-    create_helpdesk_account,
-    create_real_category,
-    create_request_ticket,
-    get_app_user,
-    update_real_user,
-    update_request_ticket,
-)
+from utils import *
 
 helpdesk_bp = Blueprint("helpdesk", __name__)
 
@@ -131,6 +119,51 @@ def update_ticket(ticket_id):
     flash(message, "success" if updated else "danger")
     return redirect("/helpdesk")
 
+@helpdesk_bp.route("/helpdesk/approve_registration/<int:ticket_id>", methods=["POST"])
+def approve_registration(ticket_id):
+    if not helpdesk_only():
+        flash("Unauthorized access.", "danger")
+        return redirect(url_for("index"))
+
+    import sqlite3 as sql
+    from utils import DB_NAME, hash_password
+
+    conn = sql.connect(DB_NAME)
+    conn.row_factory = sql.Row
+    cursor = conn.cursor()
+
+    try:
+        ticket = cursor.execute(
+            "SELECT sender_email, request_desc FROM Requests WHERE request_id = ?",
+            (ticket_id,)
+        ).fetchone()
+
+        if not ticket:
+            flash("Request not found.", "danger")
+            return redirect("/helpdesk")
+
+        email = ticket["sender_email"]
+        position = ticket["request_desc"]
+
+        cursor.execute(
+            "INSERT OR IGNORE INTO Helpdesk (email, position) VALUES (?, ?)",
+            (email, position)
+        )
+
+        cursor.execute(
+            "UPDATE Requests SET request_status = 1, helpdesk_staff_email = ? WHERE request_id = ?",
+            (session["user_email"], ticket_id)
+        )
+
+        conn.commit()
+        flash(f"Staff account for {email} approved successfully.", "success")
+    except sql.Error as e:
+        conn.rollback()
+        flash(f"Error during approval: {e}", "danger")
+    finally:
+        conn.close()
+
+    return redirect("/helpdesk")
 
 @helpdesk_bp.route("/helpdesk/export/<fmt>")
 def export_helpdesk(fmt):

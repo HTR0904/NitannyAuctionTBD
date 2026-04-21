@@ -32,13 +32,17 @@
             transition: all 0.15s ease;
             background-color: #fff;
             box-shadow: 0 10px 24px rgba(4, 30, 66, 0.06);
+            height: 100%;
         }
-        .role-card:hover,
-        .role-card.active {
+        .role-card:hover, .role-card.active {
             border-color: var(--navy);
             box-shadow: 0 14px 30px rgba(4, 30, 66, 0.12);
+            background-color: #f8fbff;
         }
-        .seller-only { display: none; }
+        /* Bootstrap toggle logic helpers */
+        .role-section { display: none; }
+        .role-section.show { display: block; }
+
         .btn-navy { background-color: var(--navy); border-color: var(--navy); color: #fff; }
         .btn-navy:hover { background-color: var(--navy-soft); border-color: var(--navy-soft); color: #fff; }
         .info-card { border: 1px solid #d7e2f2; border-radius: 18px; background: #f8fbff; }
@@ -47,16 +51,34 @@
     </style>
 </head>
 <body>
+
+<div class="modal fade" id="registrationModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content border-0 shadow" style="border-radius: 20px;">
+            <div class="modal-body text-center p-5">
+                <div class="display-4 text-success mb-3">✓</div>
+                <h3 class="font-weight-bold">Registration Submitted</h3>
+                <p class="text-muted">{{ success }}</p>
+                <a href="/" class="btn btn-navy px-5">Continue to Login</a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="container py-5">
     <div class="card register-card">
         <div class="row no-gutters">
             <div class="col-lg-4 register-side p-5 d-flex flex-column justify-content-center">
                 <span class="badge badge-warning text-dark mb-3">Account Creation</span>
                 <h1 class="font-weight-bold">Join the platform</h1>
-                <p>Create a bidder or seller account from the same onboarding flow and come back to staff later if you need account support.</p>
+                <p>Select your specific role to get started. Staff accounts are restricted to helpdesk credentials only.</p>
                 <div class="info-card text-dark p-3 mt-3">
-                    <div class="small text-uppercase font-weight-bold text-muted">What you can do</div>
-                    <div class="mt-2">Bidder accounts can browse and bid. Seller accounts can list products and send helpdesk requests.</div>
+                    <div class="small text-uppercase font-weight-bold text-muted">Role Permissions</div>
+                    <ul class="list-unstyled mb-0 mt-2 small">
+                        <li><strong>Bidders:</strong> Full bidding & profile access.</li>
+                        <li><strong>Sellers:</strong> Auction listing & payouts.</li>
+                        <li><strong>Helpdesk:</strong> Ticket management tools.</li>
+                    </ul>
                 </div>
                 <a href="/" class="btn btn-outline-light mt-4">Back to login</a>
             </div>
@@ -64,7 +86,7 @@
             <div class="col-lg-8 p-4 p-md-5">
                 <div class="mb-4">
                     <h2 class="font-weight-bold mb-1">Create your account</h2>
-                    <p class="text-muted mb-0">Join Nittany Auction to start bidding or selling.</p>
+                    <p class="text-muted mb-0">Join Nittany Auction to start bidding, selling, or supporting.</p>
                 </div>
 
                 {% if error %}
@@ -76,30 +98,28 @@
                 </div>
                 {% endif %}
 
-                {% if success %}
-                <div class="alert alert-success alert-dismissible fade show" role="alert">
-                    {{ success }} <a href="/">Click here to login.</a>
-                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                {% endif %}
-
                 <form action="{{url_for('auth.register')}}" method="POST" id="registerForm">
                     <div class="section-title">Account Type</div>
                     <div class="row mb-4">
-                        <div class="col-6 mb-3 mb-md-0">
+                        <div class="col-md-4 mb-3">
                             <div class="role-card text-center p-3 active" id="bidderCard" onclick="selectRole('bidder')">
                                 <div class="role-icon mb-2">B</div>
                                 <div class="font-weight-bold">Bidder</div>
-                                <small class="text-muted">Browse and bid on items</small>
+                                <small class="text-muted">Browse and bid</small>
                             </div>
                         </div>
-                        <div class="col-6">
+                        <div class="col-md-4 mb-3">
                             <div class="role-card text-center p-3" id="sellerCard" onclick="selectRole('seller')">
                                 <div class="role-icon mb-2">S</div>
                                 <div class="font-weight-bold">Seller</div>
-                                <small class="text-muted">List products for auction</small>
+                                <small class="text-muted">List products</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="role-card text-center p-3" id="staffCard" onclick="selectRole('helpdesk')">
+                                <div class="role-icon mb-2">H</div>
+                                <div class="font-weight-bold">Helpdesk</div>
+                                <small class="text-muted">Support staff</small>
                             </div>
                         </div>
                     </div>
@@ -109,9 +129,8 @@
 
                     <div class="section-title">Account Credentials</div>
                     <div class="form-group">
-                        <label for="email">Email Address (Your User ID)</label>
+                        <label for="email">Email Address</label>
                         <input type="email" name="email" id="email" class="form-control" placeholder="you@psu.edu" required>
-                        <small class="form-text text-muted">This becomes your login email. Email changes later need helpdesk support.</small>
                     </div>
 
                     <div class="form-row">
@@ -125,61 +144,70 @@
                         </div>
                     </div>
 
-                    <hr>
-
-                    <div class="section-title">Personal Information</div>
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label for="first_name">First Name</label>
-                            <input type="text" name="first_name" id="first_name" class="form-control" required>
+                    <div class="role-section bidder-only show">
+                        <hr>
+                        <div class="section-title">Personal Information</div>
+                        <div class="form-row">
+                            <div class="form-group col-md-6">
+                                <label for="first_name">First Name</label>
+                                <input type="text" name="first_name" id="first_name" class="form-control" required>
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label for="last_name">Last Name</label>
+                                <input type="text" name="last_name" id="last_name" class="form-control" required>
+                            </div>
                         </div>
-                        <div class="form-group col-md-6">
-                            <label for="last_name">Last Name</label>
-                            <input type="text" name="last_name" id="last_name" class="form-control" required>
+                        <div class="form-row">
+                            <div class="form-group col-md-4">
+                                <label for="age">Age</label>
+                                <input type="number" name="age" id="age" class="form-control" min="13">
+                            </div>
+                            <div class="form-group col-md-8">
+                                <label for="major">Major <small class="text-muted">(optional)</small></label>
+                                <input type="text" name="major" id="major" class="form-control">
+                            </div>
+                        </div>
+
+                        <div class="section-title mt-3">Home Address</div>
+                        <div class="form-row">
+                            <div class="form-group col-md-3">
+                                <label for="street_num">Street #</label>
+                                <input type="number" name="street_num" id="street_num" class="form-control">
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label for="street_name">Street Name</label>
+                                <input type="text" name="street_name" id="street_name" class="form-control">
+                            </div>
+                            <div class="form-group col-md-3">
+                                <label for="zipcode">Zipcode</label>
+                                <input type="number" name="zipcode" id="zipcode" class="form-control">
+                            </div>
                         </div>
                     </div>
 
-                    <div class="form-row">
-                        <div class="form-group col-md-4">
-                            <label for="age">Age</label>
-                            <input type="number" name="age" id="age" class="form-control" min="13" max="120">
-                        </div>
-                        <div class="form-group col-md-8">
-                            <label for="major">Major <small class="text-muted">(optional)</small></label>
-                            <input type="text" name="major" id="major" class="form-control" placeholder="e.g. Computer Science">
-                        </div>
-                    </div>
-
-                    <div class="section-title mt-3">Home Address</div>
-                    <p class="text-muted small">Optional, but if provided it must match a recognized zipcode in the system.</p>
-                    <div class="form-row">
-                        <div class="form-group col-md-3">
-                            <label for="street_num">Street #</label>
-                            <input type="number" name="street_num" id="street_num" class="form-control">
-                        </div>
-                        <div class="form-group col-md-6">
-                            <label for="street_name">Street Name</label>
-                            <input type="text" name="street_name" id="street_name" class="form-control">
-                        </div>
-                        <div class="form-group col-md-3">
-                            <label for="zipcode">Zipcode</label>
-                            <input type="number" name="zipcode" id="zipcode" class="form-control">
-                        </div>
-                    </div>
-
-                    <div class="seller-only">
+                    <div class="role-section seller-only">
                         <hr>
                         <div class="section-title">Banking Information</div>
-                        <p class="text-muted small">Seller accounts need payout information before they can complete auction sales.</p>
+                        <p class="text-muted small">Required for auction payouts.</p>
                         <div class="form-row">
                             <div class="form-group col-md-6">
                                 <label for="bank_routing_number">Bank Routing Number</label>
-                                <input type="text" name="bank_routing_number" id="bank_routing_number" class="form-control" placeholder="e.g. 0011-4959-0">
+                                <input type="text" name="bank_routing_number" id="bank_routing_number" class="form-control">
                             </div>
                             <div class="form-group col-md-6">
                                 <label for="bank_account_number">Bank Account Number</label>
                                 <input type="number" name="bank_account_number" id="bank_account_number" class="form-control">
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="role-section helpdesk-only">
+                        <hr>
+                        <div class="section-title">Staff Details</div>
+                        <p class="text-muted small">Specify your professional position for administrative review.</p>
+                        <div class="form-group">
+                            <label for="position">Requested Position</label>
+                            <input type="text" name="position" id="position" class="form-control" placeholder="e.g., Database Administrator">
                         </div>
                     </div>
 
@@ -196,21 +224,42 @@
     </div>
 </div>
 
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+
 <script>
+    // Handle Modal if success variable exists from backend
+    {% if success %}
+        $(document).ready(function() {
+            $('#registrationModal').modal('show');
+        });
+    {% endif %}
+
     function selectRole(role) {
         document.getElementById('roleInput').value = role;
+
+        // Visual highlights
         document.getElementById('bidderCard').classList.toggle('active', role === 'bidder');
         document.getElementById('sellerCard').classList.toggle('active', role === 'seller');
+        document.getElementById('staffCard').classList.toggle('active', role === 'helpdesk');
 
-        const sellerFields = document.querySelectorAll('.seller-only');
-        sellerFields.forEach(function (el) {
-            el.style.display = role === 'seller' ? 'block' : 'none';
-        });
+        // Section Toggles using role-section helper class
+        document.querySelectorAll('.role-section').forEach(el => el.classList.remove('show'));
 
-        document.getElementById('bank_routing_number').required = role === 'seller';
-        document.getElementById('bank_account_number').required = role === 'seller';
+        if (role === 'bidder') document.querySelector('.bidder-only').classList.add('show');
+        if (role === 'seller') document.querySelector('.seller-only').classList.add('show');
+        if (role === 'helpdesk') document.querySelector('.helpdesk-only').classList.add('show');
+
+        // Requirement Management
+        document.getElementById('first_name').required = (role === 'bidder');
+        document.getElementById('last_name').required = (role === 'bidder');
+        document.getElementById('bank_routing_number').required = (role === 'seller');
+        document.getElementById('bank_account_number').required = (role === 'seller');
+        document.getElementById('position').required = (role === 'helpdesk');
     }
 
+    // Form Validation (Password Match)
     document.getElementById('registerForm').addEventListener('submit', function (e) {
         const pw = document.getElementById('password').value;
         const cpw = document.getElementById('confirm_password').value;
@@ -220,8 +269,5 @@
         }
     });
 </script>
-
-<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
 </body>
 </html>
