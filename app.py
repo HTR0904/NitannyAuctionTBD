@@ -252,7 +252,7 @@ def place_bid():
         prev_row = cur.fetchone()
         prev_high_bidder = prev_row['Bidder_Email'] if prev_row else None
 
-        # 3. Enforce the $1 increment rule
+        # Enforce the $1 increment rule
         cur.execute("""
                     SELECT COALESCE(MAX(Bid_Price), 0) + 1 AS needed
                     FROM Bids
