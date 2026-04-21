@@ -45,7 +45,7 @@
     <form action="/search" method="GET">
         <div class="input-group input-group-lg mb-4">
             <input type="text" name="q" class="form-control"
-                   placeholder="Search by title or product name..." value="{{ query or '' }}">
+                   placeholder="Search by title, product, or seller..." value="{{ query or '' }}">
             <div class="input-group-append">
                 <button type="submit" class="btn btn-dark">Search</button>
             </div>
@@ -135,6 +135,7 @@
                             <small class="text-muted">
                                 <span class="badge badge-light">{{ item.category }}</span>
                                 &nbsp; Listing #{{ item.listing_id }}
+                                &nbsp; | &nbsp; <strong>Seller:</strong> {{ item.seller_name }}
                             </small>
                         </div>
                         <div class="col-md-4 text-right">
@@ -174,18 +175,12 @@ $(document).ready(function() {
         var $currentSelect = $(this);
         var selectedValue = $currentSelect.val();
 
-        // Clear out any sub-dropdowns that appear AFTER the one we just changed
         $currentSelect.nextAll('.dynamic-category').remove();
-
-        // Set the hidden input to the current selection so it passes to the backend
         $('#final_category_input').val(selectedValue);
 
         if (selectedValue) {
-            // Ping the get_subcategories to see if this category has children
             $.getJSON('/get_subcategories', { parent: selectedValue }, function(data) {
-
                 if (data.subcategories && data.subcategories.length > 0) {
-                    // Create a new dropdown with a bottom margin
                     var $newSelect = $('<select class="form-control form-control-sm dynamic-category mb-2"></select>');
                     $newSelect.append('<option value="" selected disabled>Select Subcategory...</option>');
 
@@ -193,19 +188,17 @@ $(document).ready(function() {
                         $newSelect.append('<option value="' + child + '">' + child + '</option>');
                     });
 
-                    // Insert it directly AFTER the dropdown we just changed!
                     $currentSelect.after($newSelect);
                 }
             });
         }
     });
 
-    // Handle the 'Clear & Change' button
     $('#clear-category-btn').click(function(e) {
         e.preventDefault();
-        $('#active-category-display').remove(); // Destroy the breadcrumb box
-        $('#final_category_input').val('');     // Wipe the hidden input
-        $('#dropdown-wrapper').slideDown('fast'); // Reveal the dropdown to start fresh
+        $('#active-category-display').remove();
+        $('#final_category_input').val('');
+        $('#dropdown-wrapper').slideDown('fast');
     });
 });
 </script>

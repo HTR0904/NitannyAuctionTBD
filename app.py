@@ -110,7 +110,7 @@ def auction_detail(seller_email, listing_id):
     """, (me,))
     card_count = cur.fetchone()['total']
 
-    # Fetch Auction Details
+    # Fetch Auction Details with Seller/Vendor Name support
     cur.execute("""
         SELECT
             a.Listing_ID AS listing_id,
@@ -122,6 +122,8 @@ def auction_detail(seller_email, listing_id):
             a.Max_bids AS max_bids,
             a.Reserve_Price AS reserve_price,
             a.Status AS status_code,
+            -- Logic to determine Seller Name vs Business Name 
+            COALESCE(lv.Business_Name, bdr.first_name || ' ' || bdr.last_name) AS seller_name,
             (
                 SELECT COALESCE(MAX(b.Bid_Price), 0)
                 FROM Bids b
@@ -151,7 +153,9 @@ def auction_detail(seller_email, listing_id):
                 WHERE r.Seller_Email = a.Seller_Email
             ) AS rating_count
         FROM Auction_Listings a
-        WHERE a.Listing_ID = ? AND a.Seller_Email = ?
+        LEFT JOIN Local_Vendors lv ON a.Seller_Email = lv.Email 
+        LEFT JOIN Bidders bdr ON a.Seller_Email = bdr.email 
+        WHERE a.Listing_ID = ? AND a.Seller_Email = ? 
     """, (listing_id, seller_email))
     item = cur.fetchone()
 
@@ -191,7 +195,7 @@ def auction_detail(seller_email, listing_id):
     """, (me, listing_id, seller_email))
     is_watching = bool(cur.fetchone())
 
-    # Check if a transaction already exists (Has the user paid?)
+    # Check if a transaction exists (Uses Buyer_Email from schema)
     cur.execute("""
         SELECT 1
         FROM Transactions
@@ -804,10 +808,6 @@ def watchlist():
 
     return render_template('watchlist.html', watchlist=watched_items)
 
-
-
-
-
 @app.route('/settings')
 def settings():
     if 'user_email' not in session:
@@ -960,8 +960,6 @@ def get_subcategories():
 
     return jsonify({"subcategories": subcategories})
 
-
-@app.route('/search')
 @app.route('/search')
 def search():
     if 'user_email' not in session:
@@ -971,12 +969,12 @@ def search():
     selected_category = request.args.get('category', '').strip()
     min_price = request.args.get('min_price', '').strip()
     max_price = request.args.get('max_price', '').strip()
-    price_type = request.args.get('price_type', 'reserve')  # Default to starting price
+    price_type = request.args.get('price_type', 'reserve')
 
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
 
-    # Skip the 'Root' root node and fetch its direct children as our starting point
+    # Fetch top-level categories
     cursor.execute('''
                    SELECT category_name
                    FROM Categories
@@ -988,32 +986,33 @@ def search():
     params = []
     where_clauses = []
     having_clauses = []
-    breadcrumbs = []  # store reverse-lookup path
+    breadcrumbs = []
 
-    # Keyword Filter
+    # Keyword Filter: Title, Product Name, Description, or Seller Name
     if query:
-        where_clauses.append("(al.Auction_Title LIKE ? OR al.Product_Name LIKE ? OR al.Product_Description LIKE ?)")
+        # Search listing details and seller names (Business Name or First/Last Name)
+        where_clauses.append("""
+            (al.Auction_Title LIKE ? 
+             OR al.Product_Name LIKE ? 
+             OR al.Product_Description LIKE ? 
+             OR lv.Business_Name LIKE ? 
+             OR bdr.first_name LIKE ? 
+             OR bdr.last_name LIKE ?)
+        """)
         kw = f'%{query}%'
-        params.extend([kw, kw, kw])
+        params.extend([kw, kw, kw, kw, kw, kw])
 
-    # Category Filter & Reverse Breadcrumb Lookup
+    # Category Filter with Recursive Lookup
     if selected_category:
-
         current_node = selected_category
         while current_node:
-            breadcrumbs.insert(0, current_node)  # Insert at the front so it reads top-to-bottom
+            breadcrumbs.insert(0, current_node)
             cursor.execute("SELECT parent_category FROM Categories WHERE category_name = ?", (current_node,))
             row = cursor.fetchone()
-            # If a parent exists, set it as the new current_node to continue the loop
-            if row and row[0]:
-                current_node = row[0]
-            else:
-                current_node = None
+            current_node = row[0] if row and row[0] else None
 
         descendants = [selected_category]
         categories_to_check = [selected_category]
-
-        # Loop through the database to find all children, grandchildren, etc.
         while categories_to_check:
             current = categories_to_check.pop(0)
             cursor.execute("SELECT category_name FROM Categories WHERE parent_category = ?", (current,))
@@ -1021,7 +1020,6 @@ def search():
             descendants.extend(children)
             categories_to_check.extend(children)
 
-        # Dynamically build an IN (?, ?, ?) clause based on how many descendants we found
         placeholders = ', '.join(['?'] * len(descendants))
         where_clauses.append(f"al.Category IN ({placeholders})")
         params.extend(descendants)
@@ -1032,52 +1030,43 @@ def search():
 
     if price_type == 'reserve':
         if min_price:
-            try:
-                where_clauses.append(f"{price_expr_reserve} >= ?")
-                params.append(float(min_price))
-            except ValueError:
-                pass
+            where_clauses.append(f"{price_expr_reserve} >= ?")
+            params.append(float(min_price))
         if max_price:
-            try:
-                where_clauses.append(f"{price_expr_reserve} <= ?")
-                params.append(float(max_price))
-            except ValueError:
-                pass
+            where_clauses.append(f"{price_expr_reserve} <= ?")
+            params.append(float(max_price))
     else:
         if min_price:
-            try:
-                having_clauses.append(f"{price_expr_bid} >= ?")
-                params.append(float(min_price))
-            except ValueError:
-                pass
+            having_clauses.append(f"{price_expr_bid} >= ?")
+            params.append(float(min_price))
         if max_price:
-            try:
-                having_clauses.append(f"{price_expr_bid} <= ?")
-                params.append(float(max_price))
-            except ValueError:
-                pass
+            having_clauses.append(f"{price_expr_bid} <= ?")
+            params.append(float(max_price))
 
-    # Main Query Assembly
+    # Joining Local_Vendors and Bidders to get seller identity
     sql_query = '''
-                SELECT al.Listing_ID, \
-                       al.Seller_Email, \
-                       al.Auction_Title, \
-                       al.Product_Name, \
-                       al.Category, \
-                       al.Reserve_Price, \
-                       COUNT(b.Bid_ID)  AS bid_count, \
-                       MAX(b.Bid_Price) AS current_bid
+                SELECT al.Listing_ID, 
+                       al.Seller_Email, 
+                       al.Auction_Title, 
+                       al.Product_Name, 
+                       al.Category, 
+                       al.Reserve_Price, 
+                       COUNT(b.Bid_ID)  AS bid_count, 
+                       MAX(b.Bid_Price) AS current_bid,
+                       COALESCE(lv.Business_Name, bdr.first_name || ' ' || bdr.last_name) AS seller_name
                 FROM Auction_Listings al
+                         LEFT JOIN Local_Vendors lv ON al.Seller_Email = lv.Email
+                         LEFT JOIN Bidders bdr ON al.Seller_Email = bdr.email
                          LEFT JOIN Bids b
                                    ON al.Listing_ID = b.Listing_ID
                                        AND al.Seller_Email = b.Seller_Email
-                WHERE al.Status = 1 \
+                WHERE al.Status = 1 
                 '''
 
     if where_clauses:
         sql_query += " AND " + " AND ".join(where_clauses)
 
-    sql_query += " GROUP BY al.Listing_ID, al.Seller_Email"
+    sql_query += " GROUP BY al.Listing_ID, al.Seller_Email, lv.Business_Name, bdr.first_name, bdr.last_name"
 
     if having_clauses:
         sql_query += " HAVING " + " AND ".join(having_clauses)
@@ -1096,7 +1085,8 @@ def search():
             'category': row[4],
             'reserve_price': row[5],
             'bid_count': row[6],
-            'current_bid': row[7]
+            'current_bid': row[7],
+            'seller_name': row[8]
         })
 
     conn.close()

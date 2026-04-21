@@ -115,6 +115,7 @@ def register():
         return render_template('register.html')
 
     role = request.form.get('role')
+    is_vendor = request.form.get('is_vendor') == 'on'
     email = request.form.get('email', '').strip().lower()
     password = request.form.get('password')
     confirm_password = request.form.get('confirm_password')
@@ -125,9 +126,6 @@ def register():
     if password != confirm_password:
         return render_template('register.html', error="Passwords do not match.")
 
-    if len(password) < 6:
-        return render_template('register.html', error="Password must be at least 6 characters.")
-
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     try:
@@ -135,54 +133,49 @@ def register():
         if cursor.fetchone():
             return render_template('register.html', error="This email is already registered.")
 
+        # HELPDESK REGISTRATION
         if role == 'helpdesk':
-            # NEW: Grab the position from the form data, with a fallback if empty
             position = request.form.get('position', '').strip() or 'Helpdesk Staff'
 
+            # Using established User_Login table and hash_password function
             cursor.execute("INSERT INTO User_Login (email, password_hash) VALUES (?, ?)",
                            (email, hash_password(password)))
+
+            # Helpdesk staff info as per schema
+            cursor.execute("INSERT INTO Helpdesk (email, position) VALUES (?, ?)", (email, position))
+
+            # Registration request as per schema
             cursor.execute(
                 '''
                 INSERT INTO Requests (sender_email, helpdesk_staff_email, request_type, request_desc, request_status)
                 VALUES (?, ?, ?, ?, ?)
                 ''',
-                # UPDATED: Pass the dynamic 'position' variable instead of the hardcoded string
                 (email, DEFAULT_HELPDESK_EMAIL, 'Registration', position, 0),
             )
             conn.commit()
-            return render_template('register.html',
-                                   success="Staff registration submitted! Please wait for admin approval.")
+            return render_template('register.html', success="Staff registration submitted!")
 
+        # BIDDER / SELLER SHARED INFO
+        # Sellers are a subset of Bidders, so we always populate Bidders
         first_name = request.form.get('first_name', '').strip()
         last_name = request.form.get('last_name', '').strip()
-
-        if not first_name or not last_name:
-            return render_template('register.html', error="Names are required for bidders and sellers.")
-
-        if role == 'seller':
-            bank_routing = request.form.get('bank_routing_number', '').strip()
-            bank_account = request.form.get('bank_account_number')
-            if not bank_routing or not bank_account:
-                return render_template('register.html', error="Sellers must provide banking information.")
-
         age = request.form.get('age')
         major = request.form.get('major', '').strip() or None
-        street_num = request.form.get('street_num')
-        street_name = request.form.get('street_name', '').strip()
-        zipcode = request.form.get('zipcode')
 
+        # Handle Home Address
         home_address_id = None
-        if street_num and street_name and zipcode:
-            cursor.execute("SELECT zipcode FROM Zipcode_Info WHERE zipcode = ?", (zipcode,))
-            if not cursor.fetchone():
-                return render_template('register.html', error=f"Zipcode {zipcode} is not recognized.")
+        h_street_num = request.form.get('street_num')
+        h_street_name = request.form.get('street_name', '').strip()
+        h_zipcode = request.form.get('zipcode')
 
+        if h_street_num and h_street_name and h_zipcode:
             home_address_id = uuid.uuid4().hex
             cursor.execute(
                 "INSERT INTO Address (address_id, zipcode, street_num, street_name) VALUES (?, ?, ?, ?)",
-                (home_address_id, zipcode, street_num, street_name),
+                (home_address_id, h_zipcode, h_street_num, h_street_name),
             )
 
+        # Core User and Bidder entries
         cursor.execute("INSERT INTO User_Login (email, password_hash) VALUES (?, ?)", (email, hash_password(password)))
         cursor.execute(
             '''
@@ -192,7 +185,12 @@ def register():
             (email, first_name, last_name, age or None, home_address_id, major),
         )
 
+        # Seller Logic
         if role == 'seller':
+            bank_routing = request.form.get('bank_routing_number', '').strip()
+            bank_account = request.form.get('bank_account_number')
+
+            # Populate Sellers table
             cursor.execute(
                 '''
                 INSERT INTO Sellers (email, bank_routing_number, bank_account_number, balance)
@@ -201,12 +199,38 @@ def register():
                 (email, bank_routing, bank_account),
             )
 
+            # Populate Local_Vendors if applicable
+            if is_vendor:
+                business_name = request.form.get('business_name', '').strip()
+                phone = request.form.get('customer_service_phone', '').strip()
+
+                # Separate Address entry for Business Address
+                biz_address_id = None
+                v_street_num = request.form.get('v_street_num')
+                v_street_name = request.form.get('v_street_name', '').strip()
+                v_zipcode = request.form.get('v_zipcode')
+
+                if v_street_num and v_street_name and v_zipcode:
+                    biz_address_id = uuid.uuid4().hex
+                    cursor.execute(
+                        "INSERT INTO Address (address_id, zipcode, street_num, street_name) VALUES (?, ?, ?, ?)",
+                        (biz_address_id, v_zipcode, v_street_num, v_street_name),
+                    )
+
+                cursor.execute(
+                    '''
+                    INSERT INTO Local_Vendors (Email, Business_Name, Business_Address_ID, Customer_Service_Phone_Number)
+                    VALUES (?, ?, ?, ?)
+                    ''',
+                    (email, business_name, biz_address_id, phone),
+                )
+
         conn.commit()
         ensure_app_user(email, role)
         return render_template('register.html', success=f"Account created successfully as a {role}!")
 
     except sql.Error as e:
         conn.rollback()
-        return render_template('register.html', error="A database error occurred.")
+        return render_template('register.html', error=f"Database error: {str(e)}")
     finally:
         conn.close()

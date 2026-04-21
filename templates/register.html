@@ -76,7 +76,7 @@
                     <div class="small text-uppercase font-weight-bold text-muted">Role Permissions</div>
                     <ul class="list-unstyled mb-0 mt-2 small">
                         <li><strong>Bidders:</strong> Full bidding & profile access.</li>
-                        <li><strong>Sellers:</strong> Auction listing & payouts.</li>
+                        <li><strong>Sellers:</strong> Listing tools & payouts.</li>
                         <li><strong>Helpdesk:</strong> Ticket management tools.</li>
                     </ul>
                 </div>
@@ -105,21 +105,21 @@
                             <div class="role-card text-center p-3 active" id="bidderCard" onclick="selectRole('bidder')">
                                 <div class="role-icon mb-2">B</div>
                                 <div class="font-weight-bold">Bidder</div>
-                                <small class="text-muted">Browse and bid</small>
+                                <small class="text-muted">Browse/Bid</small>
                             </div>
                         </div>
                         <div class="col-md-4 mb-3">
                             <div class="role-card text-center p-3" id="sellerCard" onclick="selectRole('seller')">
                                 <div class="role-icon mb-2">S</div>
                                 <div class="font-weight-bold">Seller</div>
-                                <small class="text-muted">List products</small>
+                                <small class="text-muted">List Items</small>
                             </div>
                         </div>
                         <div class="col-md-4 mb-3">
                             <div class="role-card text-center p-3" id="staffCard" onclick="selectRole('helpdesk')">
                                 <div class="role-icon mb-2">H</div>
                                 <div class="font-weight-bold">Helpdesk</div>
-                                <small class="text-muted">Support staff</small>
+                                <small class="text-muted">Support</small>
                             </div>
                         </div>
                     </div>
@@ -150,11 +150,11 @@
                         <div class="form-row">
                             <div class="form-group col-md-6">
                                 <label for="first_name">First Name</label>
-                                <input type="text" name="first_name" id="first_name" class="form-control" required>
+                                <input type="text" name="first_name" id="first_name" class="form-control">
                             </div>
                             <div class="form-group col-md-6">
                                 <label for="last_name">Last Name</label>
-                                <input type="text" name="last_name" id="last_name" class="form-control" required>
+                                <input type="text" name="last_name" id="last_name" class="form-control">
                             </div>
                         </div>
                         <div class="form-row">
@@ -185,10 +185,45 @@
                         </div>
                     </div>
 
-                    <div class="role-section seller-only">
+                    <div class="role-section seller-banking">
                         <hr>
+                        <div class="section-title">Seller Configuration</div>
+
+                        <div class="custom-control custom-checkbox mb-4">
+                            <input type="checkbox" class="custom-control-input" id="isVendorCheckbox" name="is_vendor" onchange="toggleVendorFields()">
+                            <label class="custom-control-label font-weight-bold" for="isVendorCheckbox">I am registering as a Local Vendor / Business</label>
+                            <p class="text-muted small">Check this if you represent a physical business rather than an individual seller.</p>
+                        </div>
+
+                        <div id="vendorFields" style="display: none;">
+                            <div class="section-title">Business Information</div>
+                            <div class="form-group">
+                                <label for="business_name">Business Name</label>
+                                <input type="text" name="business_name" id="business_name" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label for="customer_service_phone">Customer Service Phone</label>
+                                <input type="tel" name="customer_service_phone" id="customer_service_phone" class="form-control" placeholder="555-0199">
+                            </div>
+                            <div class="section-title mt-3">Business Address</div>
+                            <div class="form-row">
+                                <div class="form-group col-md-3">
+                                    <label for="v_street_num">Street #</label>
+                                    <input type="number" name="v_street_num" id="v_street_num" class="form-control">
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label for="v_street_name">Street Name</label>
+                                    <input type="text" name="v_street_name" id="v_street_name" class="form-control">
+                                </div>
+                                <div class="form-group col-md-3">
+                                    <label for="v_zipcode">Zipcode</label>
+                                    <input type="number" name="v_zipcode" id="v_zipcode" class="form-control">
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="section-title">Banking Information</div>
-                        <p class="text-muted small">Required for auction payouts.</p>
+                        <p class="text-muted small">Required for auction payouts and account balance management.</p>
                         <div class="form-row">
                             <div class="form-group col-md-6">
                                 <label for="bank_routing_number">Bank Routing Number</label>
@@ -229,12 +264,25 @@
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
 
 <script>
-    // Handle Modal if success variable exists from backend
     {% if success %}
         $(document).ready(function() {
             $('#registrationModal').modal('show');
         });
     {% endif %}
+
+    function toggleVendorFields() {
+        const isVendor = document.getElementById('isVendorCheckbox').checked;
+        const vendorFields = document.getElementById('vendorFields');
+
+        vendorFields.style.display = isVendor ? 'block' : 'none';
+
+        // Toggle requirements for vendor fields
+        document.getElementById('business_name').required = isVendor;
+        document.getElementById('customer_service_phone').required = isVendor;
+        document.getElementById('v_street_num').required = isVendor;
+        document.getElementById('v_street_name').required = isVendor;
+        document.getElementById('v_zipcode').required = isVendor;
+    }
 
     function selectRole(role) {
         document.getElementById('roleInput').value = role;
@@ -244,22 +292,32 @@
         document.getElementById('sellerCard').classList.toggle('active', role === 'seller');
         document.getElementById('staffCard').classList.toggle('active', role === 'helpdesk');
 
-        // Section Toggles using role-section helper class
+        // Section Toggles
         document.querySelectorAll('.role-section').forEach(el => el.classList.remove('show'));
 
-        if (role === 'bidder') document.querySelector('.bidder-only').classList.add('show');
-        if (role === 'seller') document.querySelector('.seller-only').classList.add('show');
-        if (role === 'helpdesk') document.querySelector('.helpdesk-only').classList.add('show');
+        if (role === 'bidder') {
+            document.querySelector('.bidder-only').classList.add('show');
+        } else if (role === 'seller') {
+            document.querySelector('.seller-banking').classList.add('show');
+            toggleVendorFields(); // Check if vendor box was already ticked
+        } else if (role === 'helpdesk') {
+            document.querySelector('.helpdesk-only').classList.add('show');
+        }
 
-        // Requirement Management
+        // Basic Requirement Management
         document.getElementById('first_name').required = (role === 'bidder');
         document.getElementById('last_name').required = (role === 'bidder');
-        document.getElementById('bank_routing_number').required = (role === 'seller');
-        document.getElementById('bank_account_number').required = (role === 'seller');
+
+        const isSeller = (role === 'seller');
+        document.getElementById('bank_routing_number').required = isSeller;
+        document.getElementById('bank_account_number').required = isSeller;
+
         document.getElementById('position').required = (role === 'helpdesk');
     }
 
-    // Form Validation (Password Match)
+    // Default initialization
+    selectRole('bidder');
+
     document.getElementById('registerForm').addEventListener('submit', function (e) {
         const pw = document.getElementById('password').value;
         const cpw = document.getElementById('confirm_password').value;
