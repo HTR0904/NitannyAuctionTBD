@@ -76,7 +76,10 @@ def create_helpdesk_account_route():
         flash("You must be logged in as helpdesk to manage admin tools.", "auth_error")
         return redirect(url_for("index"))
 
-    full_name = request.form.get("full_name", "").strip()
+    f_name = request.form.get("first_name", "").strip()
+    l_name = request.form.get("last_name", "").strip()
+    full_name = f"{f_name} {l_name}".strip()
+
     email = request.form.get("email", "").strip().lower()
     password = request.form.get("password", "")
     role = request.form.get("role", "bidder").strip()
@@ -104,11 +107,10 @@ def update_user():
         flash("You must be logged in as helpdesk to update users.", "auth_error")
         return redirect(url_for("index"))
 
-    updated, message = update_real_user(
-        request.form.get("user_email", "").strip().lower(),
-        request.form.get("full_name", "").strip(),
-        request.form.get("role", "").strip(),
-    )
+    email = request.form.get("user_email", "").strip().lower()
+    role = request.form.get("role", "").strip()
+    updated, message = update_real_user(email, "", role)
+
     flash(message, "success" if updated else "danger")
     return redirect("/helpdesk")
 

@@ -14,7 +14,6 @@
         .btn-navy { background-color: var(--navy); color: white; border: none; }
         .btn-navy:hover { color: white; background-color: var(--navy-soft); }
 
-        /* New Navy Outline Style */
         .btn-outline-navy { color: var(--navy); border: 1px solid var(--navy); background-color: transparent; }
         .btn-outline-navy:hover { background-color: var(--navy); color: white; }
 
@@ -34,7 +33,6 @@
         .section-header { border-left: 5px solid var(--navy); padding-left: 15px; margin-bottom: 20px; }
         .nested-tree { border-left: 1px solid #d7e2f2; margin-left: 10px; padding-left: 15px; }
 
-        /* Spacing and Alignment */
         .work-card table td { vertical-align: middle !important; padding: 1.1rem 0.75rem !important; }
         .ticket-subject { line-height: 1.4; display: block; margin-bottom: 4px; }
     </style>
@@ -104,9 +102,13 @@
                 <h5 class="font-weight-bold text-navy mb-3">Create New Account</h5>
                 <form action="/helpdesk/create_account" method="POST">
                     <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label class="small font-weight-bold">Full Name</label>
-                            <input type="text" class="form-control" name="full_name" required>
+                        <div class="form-group col-md-3">
+                            <label class="small font-weight-bold">First Name</label>
+                            <input type="text" class="form-control" name="first_name" required>
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label class="small font-weight-bold">Last Name</label>
+                            <input type="text" class="form-control" name="last_name" required>
                         </div>
                         <div class="form-group col-md-6">
                             <label class="small font-weight-bold">Email Address</label>
