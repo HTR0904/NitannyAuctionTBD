@@ -31,15 +31,16 @@
             align-items: center;
             justify-content: center;
         }
+
+        .navbar .form-control {
+            min-height: auto;
+            /* reset it for navbar */
+        }
     </style>
 </head>
 <body class="bg-light">
 
-<nav class="navbar navbar-dark bg-navy">
-    <div class="container">
-        <a class="navbar-brand font-weight-bold" href="{{ session.get('account_type', '/') }}">← Back to Dashboard</a>
-    </div>
-</nav>
+{% include 'components/navbar.html' %}
 
 <div class="container mt-5">
     <div class="row justify-content-center">

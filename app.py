@@ -19,6 +19,37 @@ app.secret_key = 'projectTBD_secret_key'
 
 host = 'http://127.0.0.1:5000/'
 
+
+@app.context_processor
+def inject_global_variables():
+    """
+    Injects variables into all Jinja templates automatically.
+    This prevents us from having to pass 'current_user' manually in every render_template().
+    """
+    global_vars = {
+        'current_user': None,
+        'unread_notifs_count': 0
+    }
+
+    if 'user_email' in session:
+        user_email = session['user_email']
+
+        # Inject the user object (for the navbar name)
+        global_vars['current_user'] = get_app_user(user_email)
+
+        # Inject unread notifications globally so the bell icon always works!
+        try:
+            db = db_connect()
+            cur = db.cursor()
+            cur.execute("SELECT COUNT(*) AS count FROM Notifications WHERE user_email = ? AND is_read = 0",
+                        (user_email,))
+            global_vars['unread_notifs_count'] = cur.fetchone()['count']
+            db.close()
+        except Exception:
+            pass  # In case DB errors out
+
+    return global_vars
+
 @app.route('/')
 def index():
     if 'user_email' in session and 'account_type' in session:

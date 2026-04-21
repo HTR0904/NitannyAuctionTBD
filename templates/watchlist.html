@@ -11,7 +11,6 @@
         :root { --navy: #041e42; --navy-soft: #153d72; --cloud: #eef3fb; }
         body { background: linear-gradient(180deg, #f4f7fb, #ffffff); min-height: 100vh; }
 
-        /* Consistency with Dashboard Styling */
         .bg-navy { background-color: var(--navy); }
         .text-navy { color: var(--navy) !important; }
         .btn-navy { background-color: var(--navy); color: white; border: none; border-radius: 8px; transition: all 0.2s; }
@@ -26,7 +25,6 @@
 
         .section-header { border-left: 5px solid var(--navy); padding-left: 15px; margin-bottom: 30px; }
 
-        /* Unified Pill Styling - No clashing colors */
         .pill {
             display: inline-block; border-radius: 999px; padding: 0.25rem 0.85rem;
             background: var(--cloud); color: var(--navy); font-size: 0.75rem; font-weight: 700;
@@ -35,43 +33,12 @@
         .pill-muted { background: #f0f0f0; color: #6c757d; }
 
         .price-tag { font-size: 1.3rem; color: var(--navy); font-weight: 800; }
-
-        /* Navbar */
-        .navbar .nav-link { color: rgba(255,255,255,0.85) !important; }
-        .navbar .nav-link:hover { color: #fff !important; }
-        .form-control { border-radius: 8px; }
     </style>
 </head>
 
 <body>
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-navy mb-4">
-    <div class="container">
-        <a class="navbar-brand font-weight-bold" href="{{ url_for('bidder') }}">Nittany Auction</a>
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-
-        <div class="collapse navbar-collapse" id="navbarContent">
-            <form class="form-inline mx-auto my-2 my-lg-0" action="/search" method="GET">
-                <input class="form-control mr-sm-2" type="search" name="q" placeholder="Search auctions..." style="width: 300px">
-            </form>
-
-            <ul class="navbar-nav align-items-center">
-                <li class="nav-item"><a class="nav-link" href="{{ url_for('bidder') }}#my-bids">View Bids</a></li>
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle font-weight-bold text-white" href="#" id="profileDropdown" data-toggle="dropdown">Profile</a>
-                    <div class="dropdown-menu dropdown-menu-right shadow border-0">
-                        <a class="dropdown-item" href="/settings">Account Settings</a>
-                        <a class="dropdown-item active bg-navy" href="/watchlist">My Watchlist</a>
-                        <div class="dropdown-divider"></div>
-                        <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">Logout</a>
-                    </div>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
+{% include 'components/navbar.html' %}
 
 <div class="container mt-5">
     <div class="section-header">

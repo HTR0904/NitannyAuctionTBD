@@ -42,7 +42,6 @@
             letter-spacing: 0.5px;
         }
 
-        /* Reusing Pill Style */
         .pill {
             display: inline-block; border-radius: 999px; padding: 0.2rem 0.75rem;
             background: var(--navy); color: white; font-size: 0.7rem; font-weight: 700;
@@ -55,20 +54,11 @@
         .btn-outline-navy { color: var(--navy); border: 1px solid var(--navy); }
         .btn-outline-navy:hover { background-color: var(--navy); color: white; }
 
-        .navbar .navbar-text { font-size: 0.9rem; opacity: 0.8; }
     </style>
 </head>
 <body>
 
-<nav class="navbar navbar-dark bg-navy mb-4 shadow-sm">
-    <div class="container">
-        <a class="navbar-brand font-weight-bold"
-           href="/{{ 'seller' if account_type == '/seller' else 'bidder' }}">
-            <small class="mr-2">←</small> Dashboard
-        </a>
-        <span class="navbar-text text-light d-none d-md-inline">User: {{ user_email }}</span>
-    </div>
-</nav>
+{% include 'components/navbar.html' %}
 
 <div class="container mt-5">
     <div class="row justify-content-center">
