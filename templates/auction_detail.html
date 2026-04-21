@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{{ item.title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+
+    <style>
+        .bg-navy { background-color: #041E42; }
+        .text-navy { color: #041E42; }
+        .btn-navy { background-color: #041E42; color: white; border: none; }
+        .box { background: white; border: 1px solid #dee2e6; border-radius: 4px; box-shadow: 0 .125rem .25rem rgba(0,0,0,.075); }
+        .small-muted { font-size: 0.85rem; color: #6c757d; }
+    </style>
+</head>
+
+<body class="bg-light">
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-navy">
+    <div class="container">
+        <a class="navbar-brand font-weight-bold" href="{{ url_for('bidder') }}">Nittany Auction</a>
+
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarContent">
+            <form class="form-inline mx-auto my-2 my-lg-0" action="{{ url_for('bidder') }}" method="GET">
+                <input class="form-control mr-sm-2" type="search" name="query" value="{{ query }}" placeholder="Search auctions" style="width: 350px">
+                <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Search</button>
+            </form>
+
+            <ul class="navbar-nav align-items-center">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('bidder') }}">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('bidder') }}#my-bids">My Bids</a>
+                </li>
+                <li class="nav-item mr-3">
+                    <a class="nav-link" href="{{ url_for('bidder') }}#ratings">Ratings</a>
+                </li>
+
+                <li class="nav-item mr-3">
+                    <a class="nav-link" href="/notifications" title="Notifications">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-bell" viewBox="0 0 16 16">
+                            <path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6"/>
+                        </svg>
+                    </a>
+                </li>
+
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle font-weight-bold text-white" href="#" id="profileDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        Profile
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-right shadow-sm" aria-labelledby="profileDropdown">
+                        <a class="dropdown-item" href="/settings">Account Settings</a>
+                        <a class="dropdown-item" href="/watchlist">My Watchlist</a>
+                        <a class="dropdown-item" href="{{ url_for('notif.notifications')}}">Notifications</a>
+                        <a class="dropdown-item" href="/contact">Contact Us</a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">Logout</a>
+                    </div>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-4">
+
+    {% if message %}
+        <div class="alert alert-{{ message.kind }}">{{ message.text }}</div>
+    {% endif %}
+
+    <div class="box p-4 mb-4">
+        <a href="{{ url_for('search') }}" class="small-muted">&larr; Back to search</a>
+
+        <h1 class="text-navy font-weight-bold mt-2">{{ item.title }}</h1>
+        <p class="lead text-muted">{{ item.product_name }}</p>
+
+        <hr>
+
+        <div class="row">
+            <div class="col-md-7">
+                <h5>Description</h5>
+                <p>{{ item.description or "No description provided." }}</p>
+
+                <p><strong>Category:</strong> {{ item.category or "Uncategorized" }}</p>
+                <p><strong>Seller:</strong> {{ item.seller_email }}</p>
+                <p><strong>Reserve Price:</strong> {{ item.reserve_price }}</p>
+
+                <p>
+                    <strong>Seller Rating:</strong>
+                    {% if item.seller_rating %}
+                        {{ item.seller_rating }}/5 from {{ item.rating_count }} rating(s)
+                    {% else %}
+                        No ratings yet
+                    {% endif %}
+                </p>
+            </div>
+
+            <div class="col-md-5">
+                <div class="box p-3">
+                    <h4 class="text-navy">Current Bid</h4>
+
+                    {% if item.current_bid > 0 %}
+                        <h2>${{ item.current_bid }}</h2>
+                    {% else %}
+                        <h2>No bids yet</h2>
+                    {% endif %}
+
+                    <p class="small-muted">Minimum next bid: ${{ item.min_bid }}</p>
+                    <p class="small-muted">Total bids: {{ item.bid_count }}</p>
+
+                    {% if my_bid %}
+                        <p><strong>Your highest bid:</strong> ${{ my_bid }}</p>
+                    {% endif %}
+
+                    {% if item.status_code == 1 %}
+                        {% if card_count == 0 %}
+                            <div class="alert alert-warning">
+                                You need a saved credit card before placing a bid.
+                            </div>
+                        {% elif item.seller_email == user_email %}
+                            <div class="alert alert-warning">
+                                You cannot bid on your own auction.
+                            </div>
+                        {% else %}
+                            <form action="{{ url_for('place_bid') }}" method="POST">
+                                <input type="hidden" name="listing_id" value="{{ item.listing_id }}">
+
+                                <div class="form-group">
+                                    <label>Your Bid</label>
+                                    <input class="form-control"
+                                           type="number"
+                                           name="bid_price"
+                                           min="{{ item.min_bid }}"
+                                           placeholder="At least ${{ item.min_bid }}"
+                                           required>
+                                </div>
+
+                                <button class="btn btn-navy btn-block" type="submit">Place Bid</button>
+                            </form>
+                        {% endif %}
+                    {% else %}
+                        <div class="alert alert-secondary">This auction is closed.</div>
+                    {% endif %}
+
+                    <form action="{{ url_for('toggle_watchlist') }}" method="POST" class="d-inline">
+                        <input type="hidden" name="seller_email" value="{{ item.seller_email }}">
+                        <input type="hidden" name="listing_id" value="{{ item.listing_id }}">
+
+                        {% if is_watching %}
+                            <button type="submit" class="btn btn-warning btn-block mt-3 font-weight-bold text-dark">
+                                ★ Watching
+                            </button>
+                        {% else %}
+                            <button type="submit" class="btn btn-outline-secondary btn-block mt-3 font-weight-bold">
+                                ☆ Add to Watchlist
+                            </button>
+                        {% endif %}
+                    </form>
+
+                    {% with success_msgs = get_flashed_messages(category_filter=["watch_success"]) %}
+                      {% if success_msgs %}
+                        <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                            {{ success_msgs[0] }}
+                            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                      {% endif %}
+                    {% endwith %}
+
+                    {% with error_msgs = get_flashed_messages(category_filter=["watch_error"]) %}
+                      {% if error_msgs %}
+                        <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                            {{ error_msgs[0] }}
+                            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                      {% endif %}
+                    {% endwith %}
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="box p-4 mb-5">
+        <h3 class="text-navy font-weight-bold mb-3">Bid History</h3>
+
+        <div class="table-responsive">
+            <table class="table table-bordered bg-white">
+                <thead class="thead-light">
+                <tr>
+                    <th>Bidder</th>
+                    <th>Bid Amount</th>
+                </tr>
+                </thead>
+
+                <tbody>
+                {% for bid in bids %}
+                    <tr>
+                        <td>{{ bid.bidder_email }}</td>
+                        <td>${{ bid.bid_price }}</td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="2" class="text-center text-muted">No bids yet.</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+
+</body>
+</html>

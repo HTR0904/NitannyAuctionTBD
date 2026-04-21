@@ -178,8 +178,6 @@ def auction_detail(listing_id):
     """, (item['seller_email'], listing_id, me))
     my_bid = cur.fetchone()['my_bid']
 
-    db.close()
-
     cur.execute("""
                 SELECT 1
                 FROM Watchlist
@@ -187,6 +185,8 @@ def auction_detail(listing_id):
                   AND Listing_ID = ?
                 """, (me, listing_id))
     is_watching = bool(cur.fetchone())
+
+    db.close()
 
     return render_template(
         'auction_detail.html',
