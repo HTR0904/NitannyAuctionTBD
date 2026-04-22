@@ -1,8 +1,8 @@
 # Nitanny Auction
 
 ## Context
-Nittany Auction is an online platform designed to connect 
-buyers and sellers through an auction system. 
+Nittany Auction is an online platform designed to connect
+buyers and sellers through an auction system.
 Users can list products, place bids, track watched items, and communicate directly with sellers.
 
 The platform supports multiple account roles: Bidders, Sellers, Helpdesk Staff.
@@ -20,9 +20,9 @@ the SHA-256 hash of the input password.
 If the hashes do not match, login fails.
 
 If they match, the user is redirected based on their role:
-- Bidders → `/bidder`
-- Sellers → `/seller`
-- Helpdesk staff → `/helpdesk`
+- Bidders -> `/bidder`
+- Sellers -> `/seller`
+- Helpdesk staff -> `/helpdesk`
 
 An error is shown if the role is not recognized.
 
@@ -30,57 +30,104 @@ Passwords are never stored as plain text and hashing is used throughout to impro
 
 ### Bidder homepage
 
-This page visualizes three main functionalities that are mentioned in our report (phase 1):
+This page supports the bidder-facing auction flow:
 - Feature trending auctions to bidders
-- Allows browsing of products and listings
+- Browse products and listings
 - View current bids participated in
-
-As of right now, it only shows visual part without actual function.
+- Open auction detail pages
+- Add and remove listings from the watchlist
+- Submit helpdesk requests
+- Receive notifications for watched listings and bid activity
 
 ### Seller homepage
 
-This page visualizes four main functionalities that are mentioned from phase 1 report. 
-- List of products including details, category, hidden reserve price, and auction stop time
-- Management of seller's listings
-- Request to additional category
-- Automated payment receive 
-
-As of right now, it only shows visual part without actual function. (shown data from current page is manualy typed into html file instead of linking with actual database)
+This page supports the seller-facing auction flow:
+- Create new product listings with details, category, hidden reserve price, quantity, and max bids
+- Manage seller listings
+- Search listings by keyword and category
+- Request additional categories through helpdesk
+- Receive notifications when auctions conclude
+- Update seller payment information from settings
 
 ### Helpdesk homepage
 
-This page visualizes four main functionalities that are mentioned in our report (phase 1):
-- Change User IDs
-- Modify account types
-- Add additional product categories
-- tools for market analysis
+This page supports the main helpdesk/admin tasks from the project checklist:
+- Account creation
+- User management
+- Category management
+- Ticket intake and assignment
+- Pseudo database export
 
-As of right now, it only shows visual part without actual function.
+Helpdesk account creation writes to the real account tables instead of a dummy table.
+New accounts are inserted into `User_Login` and then into the correct role table:
+- Bidder accounts are inserted into `Bidders`
+- Seller accounts are inserted into `Bidders` and `Sellers`
+- Helpdesk accounts are inserted into `Helpdesk`
 
+Category management inserts new categories into the real `Categories` table.
+Helpdesk staff can choose a parent category and add a child category underneath it.
+
+Tickets are stored in the real `Requests` table.
+New tickets are assigned to the default unassigned queue email `helpdesk@lsu.edu`.
+The helpdesk dashboard displays:
+- Tickets assigned to the currently logged-in helpdesk staff member
+- Unassigned tickets assigned to `helpdesk@lsu.edu`
+
+Helpdesk staff can assign unassigned tickets to themselves from the dashboard.
+They can also update ticket status and export the pseudo database view as CSV or XLSX.
+
+The helpdesk routes are split into `routes/helpdesk.py` so that new helpdesk logic does not keep growing `app.py`.
+Shared helper functions for account creation, ticket queries, category inserts, and exports are located in `utils.py`.
+
+### Watchlist
+
+The watchlist feature allows bidders to track auction listings.
+Users can watch or unwatch listings, view all watched listings from the watchlist page,
+and open the auction listing page directly from the watchlist.
+
+### Notifications
+
+The notification feature alerts users about auction and bidding events.
+Notifications are connected to the database and can be viewed from the notifications page.
+
+### Settings
+
+The settings page supports account-related updates such as password changes and payment information.
+Sellers can update bank payment information from this page.
 
 ## Organization
 ```text
 Project_Root/
-├── app.py                    # Main Python/Flask application
-├── README.md                 # Project documentation
-├── resources.md              # Documentation of resources used for project
-├── setup.md                  # Project setup instructions and guidelines
-├── templates/                # HTML frontend files
-│   ├── login.html            # Main login page
-│   ├── seller_home.html      # Main homepage for sellers
-│   ├── helpdesk_home.html    # Main homepage for helpdesk
-│   └── bidders_home.html     # Main homepage for bidders
-└── static/                   # Static assets
-    └── images/               # Image files
-        └── docs/             # Images used for README pages
-
+|-- app.py                    # Main Python/Flask application
+|-- README.md                 # Project documentation
+|-- resources.md              # Documentation of resources used for project
+|-- setup.md                  # Project setup instructions and guidelines
+|-- utils.py                  # Shared database helper functions
+|-- routes/                   # Route blueprints split out from app.py
+|   |-- auth.py               # Login, logout, and registration routes
+|   |-- helpdesk.py           # Helpdesk, ticket, category, account, and export routes
+|   `-- notif.py              # Notification routes
+|-- templates/                # HTML frontend files
+|   |-- login.html            # Main login page
+|   |-- seller_home.html      # Main homepage for sellers
+|   |-- helpdesk_home.html    # Main homepage for helpdesk
+|   |-- bidders_home.html     # Main homepage for bidders
+|   |-- search.html           # Search page
+|   |-- watchlist.html        # Watchlist page
+|   |-- notifications.html    # Notifications page
+|   `-- settings.html         # Account settings page
+`-- static/                   # Static assets
+    |-- css/                  # Shared UI polish stylesheet
+    `-- images/               # Image files
+        `-- docs/             # Images used for README pages
 ```
+
 ---
 
 ## Instructions on how to run the code
 
 ### Prerequisites
-* PyCharm Pro 
+* PyCharm Pro
 * Python 3.x installed
 
 ### Loading the Files into PyCharm Professional
@@ -95,14 +142,13 @@ Project_Root/
 3. The terminal will display a local link (currently set as http://127.0.0.1:5000/).
 4. Click the link to open the Nittany Auction login portal in your browser.
 
-
 ---
 ## Contributing to the Repo (through Github)
 > This section is for team members' reference
 
-For instructions on how to set up this project on your device, 
-along with some useful commands and guidelines when working with git, 
-please visit the  [set-up page](setup.md)
+For instructions on how to set up this project on your device,
+along with some useful commands and guidelines when working with git,
+please visit the [set-up page](setup.md)
 
 ## Resources Used
 Links to all resources used in the process of website creation [resources page](resources.md)
