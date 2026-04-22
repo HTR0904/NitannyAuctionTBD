@@ -35,7 +35,7 @@
         <hr>
 
         <div class="row">
-            <div class="col-md-7">
+            <div class="{% if session.get('account_type') == '/bidder' %}col-md-7{% else %}col-md-12{% endif %}">
                 <h5>Description</h5>
                 <p>{{ item.description or "No description provided." }}</p>
 
@@ -51,6 +51,7 @@
                 </p>
             </div>
 
+            {% if session.get('account_type') == '/bidder' %}
             <div class="col-md-5">
                 <div class="box p-3">
                     <h4 class="text-navy">Current Bid</h4>
@@ -168,6 +169,7 @@
 
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
 
