@@ -844,6 +844,7 @@ def build_xlsx_bytes(rows):
     return output
 
 # CATEGORY TRANSVERSAL ###################################
+
 def get_top_categories(cursor):
     """Fetches all categories that sit directly under 'Root'."""
     cursor.execute('''
@@ -888,25 +889,3 @@ def get_category_descendants(cursor, category_name):
         categories_to_check.extend(children)
 
     return descendants
-
-
-def build_category_tree_map(conn):
-    """
-    Fetches all categories and builds an adjacency list (tree map)
-    for rendering full drill-down/accordion menus in templates.
-    Returns the full tree map and a list of top-level categories.
-    """
-    raw_categories = conn.execute(
-        "SELECT parent_category, category_name FROM Categories ORDER BY category_name"
-    ).fetchall()
-
-    tree_map = {}
-    for row in raw_categories:
-        # Assuming row_factory is enabled, so we can access by key
-        parent = row["parent_category"]
-        child = row["category_name"]
-        tree_map.setdefault(parent, []).append(child)
-
-    top_categories = tree_map.get('Root', [])
-
-    return tree_map, top_categories
