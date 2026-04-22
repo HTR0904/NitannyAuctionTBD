@@ -1,3 +1,4 @@
+/* Shared Nittany Auction design tokens used by the global UI polish layer. */
 :root {
     --na-navy: #041e42;
     --na-blue: #153d72;
@@ -13,6 +14,7 @@ html {
     scroll-behavior: smooth;
 }
 
+/* Give every page the same soft branded backdrop without touching page logic. */
 body {
     color: var(--na-ink);
     background:
@@ -22,6 +24,7 @@ body {
     min-height: 100vh;
 }
 
+/* The faint grid adds depth while staying behind all interactive content. */
 body::before {
     content: "";
     position: fixed;
@@ -35,10 +38,12 @@ body::before {
     z-index: -1;
 }
 
+/* Keep page content above the decorative fixed background layer. */
 .container {
     position: relative;
 }
 
+/* Restyle existing Bootstrap navy bars with a richer gradient and shadow. */
 .navbar.bg-navy,
 .bg-navy {
     background:
@@ -46,6 +51,7 @@ body::before {
     box-shadow: 0 14px 36px rgba(4, 30, 66, 0.16);
 }
 
+/* The higher z-index and visible overflow prevent account dropdowns from being clipped. */
 .navbar {
     position: relative;
     z-index: 1100;
@@ -53,11 +59,13 @@ body::before {
     overflow: visible;
 }
 
+/* Preserve the current nav markup while making links feel a little more intentional. */
 .navbar-brand,
 .navbar .nav-link {
     letter-spacing: 0.01em;
 }
 
+/* Bootstrap containers can clip menus, so these wrappers must allow dropdown overflow. */
 .navbar .container,
 .navbar-collapse,
 .navbar-nav,
@@ -65,6 +73,7 @@ body::before {
     overflow: visible;
 }
 
+/* Apply the translucent card treatment to the page-specific card classes already in use. */
 .card,
 .box,
 .seller-block,
@@ -83,12 +92,14 @@ body::before {
     backdrop-filter: blur(18px);
 }
 
+/* Hero sections get a stronger shadow so they still stand apart from regular cards. */
 .jumbotron,
 .hero-shell,
 .hero-panel {
     box-shadow: 0 22px 55px rgba(4, 30, 66, 0.14) !important;
 }
 
+/* Tables keep the app data-dense while improving scanability and contrast. */
 .table {
     color: var(--na-ink);
 }
@@ -109,6 +120,7 @@ body::before {
     vertical-align: middle;
 }
 
+/* Larger inputs make long account/ticket/category text readable while typing. */
 .form-control,
 .custom-select,
 select.form-control {
@@ -120,6 +132,7 @@ select.form-control {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
+/* Ticket descriptions and category reasons need extra vertical room. */
 textarea.form-control {
     min-height: 118px;
     line-height: 1.45;
@@ -132,16 +145,19 @@ textarea.form-control {
     box-shadow: 0 0 0 0.18rem rgba(21, 61, 114, 0.16);
 }
 
+/* Labels stay bold enough to remain readable over glass-style surfaces. */
 label {
     color: var(--na-ink);
     font-weight: 600;
 }
 
+/* Buttons keep Bootstrap behavior but pick up the rounded visual language. */
 .btn {
     border-radius: 12px;
     font-weight: 600;
 }
 
+/* Primary dark buttons use the app gradient instead of a flat default color. */
 .btn-navy,
 .btn-dark {
     background: linear-gradient(135deg, var(--na-navy), var(--na-blue)) !important;
@@ -156,12 +172,14 @@ label {
     box-shadow: 0 14px 30px rgba(4, 30, 66, 0.23);
 }
 
+/* Outlined buttons remain lightweight but visible against translucent panels. */
 .btn-outline-dark,
 .btn-outline-secondary,
 .btn-outline-light {
     border-width: 1.5px;
 }
 
+/* Alerts match the softened card shape so flash messages fit the updated UI. */
 .alert {
     border: 0;
     border-radius: 16px;
@@ -173,6 +191,7 @@ label {
     letter-spacing: 0.01em;
 }
 
+/* Dropdown menus sit above cards/content and stay readable after the glass UI pass. */
 .dropdown-menu {
     z-index: 2200;
     background: var(--na-glass-strong);
@@ -182,6 +201,7 @@ label {
     overflow: visible;
 }
 
+/* Use the shared brand colors for default page links. */
 a {
     color: var(--na-blue);
 }
@@ -190,6 +210,7 @@ a:hover {
     color: var(--na-navy);
 }
 
+/* Mobile spacing keeps forms and hero text usable on narrow screens. */
 @media (max-width: 768px) {
     .display-4 {
         font-size: 2.25rem;

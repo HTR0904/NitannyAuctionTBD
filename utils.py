@@ -9,7 +9,13 @@ from flask import session
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = os.path.join(BASE_DIR, "dataset_tables.db")
+
+# Requests assigned to this shared address are treated as the unclaimed queue.
+# Helpdesk staff can then claim those tickets from the dashboard.
 DEFAULT_HELPDESK_EMAIL = "helpdeskteam@lsu.edu"
+
+# The Requests table stores status as integers, while the UI works with
+# readable labels. These maps keep the database and form values in sync.
 REQUEST_STATUS = {
     0: "Open",
     1: "In Progress",
@@ -392,9 +398,11 @@ def resolve_full_name(email):
     return email.split("@")[0].replace(".", " ").title()
 
 def ensure_app_user(email, role):
+    """Legacy compatibility hook; real account tables are now the source of truth."""
     pass
 
 def get_app_user(email):
+    """Return display and role details for one account from the real login/role tables."""
     conn = get_connection(row_factory=True)
     user = conn.execute(
         """
@@ -425,6 +433,7 @@ def get_app_user(email):
     return user
 
 def authenticate_app_user(email, password, role):
+    """Validate a password hash and confirm the account belongs to the selected role table."""
     conn = get_connection(row_factory=True)
     row = conn.execute("SELECT password_hash FROM User_Login WHERE email = ?", (email,)).fetchone()
     if not row or row["password_hash"] != hash_password(password):
@@ -436,6 +445,7 @@ def authenticate_app_user(email, password, role):
     return bool(member)
 
 def split_full_name(full_name):
+    """Split a form full name into the first/last columns used by the Bidders table."""
     parts = full_name.strip().split()
     if not parts:
         return "", ""
@@ -444,6 +454,7 @@ def split_full_name(full_name):
     return parts[0], " ".join(parts[1:])
 
 def create_helpdesk_account(full_name, email, password, role):
+    """Create an account in User_Login and then add the matching bidder/seller/helpdesk row."""
     if not all([full_name, email, password, role]):
         return False, "Please complete all account creation fields."
     if role not in ("bidder", "seller", "helpdesk"):
@@ -452,6 +463,8 @@ def create_helpdesk_account(full_name, email, password, role):
     conn = get_connection()
     cursor = conn.cursor()
     try:
+        # Every account must exist in User_Login first so authentication has one
+        # consistent password record no matter which role table the user joins.
         cursor.execute("INSERT INTO User_Login (email, password_hash) VALUES (?, ?)", (email, hash_password(password)))
         first_name, last_name = split_full_name(full_name)
         if role in ("bidder", "seller"):
@@ -484,6 +497,7 @@ def create_helpdesk_account(full_name, email, password, role):
         conn.close()
 
 def update_real_user(email, full_name, role):
+    """Move or update a user across the real role membership tables."""
     if not email:
         return False, "Please select a user email to update."
 
@@ -509,6 +523,8 @@ def update_real_user(email, full_name, role):
             if role not in ("bidder", "seller", "helpdesk"):
                 return False, "Please choose a valid account role."
             first_name, last_name = split_full_name(full_name or resolve_full_name(email))
+            # Sellers are also bidders in this schema, so seller accounts keep
+            # their Bidders row and receive an additional Sellers row.
             if role in ("bidder", "seller"):
                 cursor.execute("DELETE FROM Helpdesk WHERE email = ?", (email,))
                 cursor.execute(
@@ -529,6 +545,8 @@ def update_real_user(email, full_name, role):
             else:
                 cursor.execute("DELETE FROM Sellers WHERE email = ?", (email,))
             if role == "helpdesk":
+                # Helpdesk is treated as an admin-only role, so remove customer
+                # role rows before inserting the Helpdesk membership.
                 cursor.execute("DELETE FROM Bidders WHERE email = ?", (email,))
                 cursor.execute("DELETE FROM Sellers WHERE email = ?", (email,))
                 cursor.execute(
@@ -545,6 +563,7 @@ def update_real_user(email, full_name, role):
         conn.close()
 
 def create_real_category(parent_category, category_name):
+    """Insert a new category row using the existing parent/child category structure."""
     parent_category = parent_category or "Root"
     category_name = (category_name or "").strip()
     if not category_name:
@@ -563,6 +582,7 @@ def create_real_category(parent_category, category_name):
         conn.close()
 
 def create_request_ticket(sender_email, request_type, description):
+    """Create a Requests row and assign it to the shared helpdesk queue by default."""
     if not request_type or not description:
         return False, "Please fill out all helpdesk fields."
     conn = get_connection()
@@ -583,8 +603,11 @@ def create_request_ticket(sender_email, request_type, description):
 
 
 def update_request_ticket(ticket_id, staff_email, status_label, assigned_email=None, assign_to_me=False):
+    """Update ticket status/assignment only when the staff member owns or can claim it."""
     status_value = REQUEST_STATUS_VALUE.get(status_label, 0)
 
+    # Assign-to-me takes priority over hidden assignment form values so a queue
+    # ticket always becomes owned by the current helpdesk staff member.
     assignment = staff_email if assign_to_me else (assigned_email or staff_email)
 
     conn = get_connection()
@@ -608,10 +631,12 @@ def update_request_ticket(ticket_id, staff_email, status_label, assigned_email=N
 
 
 def collect_helpdesk_context():
+    """Build all dashboard data from real tables for users, tickets, categories, and metrics."""
     conn = get_connection(row_factory=True)
     staff_email = session.get("user_email")
 
-    # Fetch ALL users for the Directory Table
+    # Fetch all accounts for the admin directory, deriving each role from the
+    # role membership tables instead of a dummy/admin-only user list.
     users = conn.execute(
         """
         SELECT
@@ -636,7 +661,8 @@ def collect_helpdesk_context():
         """
     ).fetchall()
 
-    # Fetch tickets for the logged-in staff AND the team queue (helpdeskteam@lsu.edu)
+    # Show only tickets owned by the current staff member plus shared queue
+    # tickets that any staff member can claim.
     ticket_rows = conn.execute(
         """
         SELECT request_id, sender_email, helpdesk_staff_email, request_type, request_desc, request_status
@@ -661,14 +687,14 @@ def collect_helpdesk_context():
             "status_code": row["request_status"]
         })
 
-    # Handle hierarchical Categories
+    # Top-level categories power the "add category" form parent selector.
     raw_top_categories = conn.execute(
         "SELECT category_name FROM Categories WHERE parent_category = 'Root' ORDER BY category_name"
     ).fetchall()
 
     top_categories = [row["category_name"] for row in raw_top_categories]
 
-    # Metrics
+    # Summary cards use live counts from the same source tables shown below them.
     stats = conn.execute(
         """
         SELECT 
@@ -695,6 +721,7 @@ def collect_helpdesk_context():
 
 # Admin export functions
 def build_export_rows():
+    """Flatten ticket, sender, and role information into rows for CSV/XLSX export."""
     conn = get_connection(row_factory=True)
     rows = conn.execute(
         """
@@ -747,6 +774,7 @@ def build_export_rows():
     return export_rows
 
 def build_csv_bytes(rows):
+    """Serialize export rows into a downloadable in-memory CSV file."""
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=list(rows[0].keys()) if rows else ["Message"])
     writer.writeheader()
@@ -757,10 +785,12 @@ def build_csv_bytes(rows):
     return io.BytesIO(buffer.getvalue().encode("utf-8"))
 
 def build_xlsx_bytes(rows):
+    """Build a minimal XLSX workbook in memory without adding a third-party dependency."""
     headers = list(rows[0].keys()) if rows else ["Message"]
     data_rows = rows if rows else [{"Message": "No records available"}]
 
     def col_name(index):
+        """Convert a 1-based column number into Excel letters such as A, B, AA."""
         result = ""
         while index:
             index, remainder = divmod(index - 1, 26)
@@ -771,6 +801,7 @@ def build_xlsx_bytes(rows):
     shared_index = {}
 
     def string_id(value):
+        """Store repeated cell strings once, then reference them by shared-string index."""
         if value not in shared_index:
             shared_index[value] = len(shared_strings)
             shared_strings.append(value)
