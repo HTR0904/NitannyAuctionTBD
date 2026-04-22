@@ -4,10 +4,15 @@ import sqlite3 as sql
 from routes.auth import auth_bp
 from routes.helpdesk import helpdesk_bp
 from routes.notif import notif_bp
+
+# APP INITIALIZATION
 app = Flask(__name__)
+
+# Registering blueprints to keep the main app.py file organized
 app.register_blueprint(auth_bp)
 app.register_blueprint(helpdesk_bp)
 app.register_blueprint(notif_bp, url_prefix='/notifications')
+
 with app.app_context():
     init_db()
 
@@ -20,6 +25,7 @@ app.secret_key = 'projectTBD_secret_key'
 host = 'http://127.0.0.1:5000/'
 
 
+# GLOBAL JINJA VARIABLES
 @app.context_processor
 def inject_global_variables():
     """
@@ -34,10 +40,10 @@ def inject_global_variables():
     if 'user_email' in session:
         user_email = session['user_email']
 
-        # Inject the user object (for the navbar name)
+        # The user object (for the navbar name)
         global_vars['current_user'] = get_app_user(user_email)
 
-        # Inject unread notifications globally so the bell icon always works
+        # Unread notifications globally so the bell icon always works
         try:
             db = db_connect()
             cur = db.cursor()
@@ -50,8 +56,10 @@ def inject_global_variables():
 
     return global_vars
 
+# BASE ROUTING
 @app.route('/')
 def index():
+    # Automatically direct users to their dashboard if they are already logged in
     if 'user_email' in session and 'account_type' in session:
         return redirect(session['account_type'])
     return render_template('login.html')
@@ -63,6 +71,7 @@ def change_password():
     new_password = request.form.get('new_password')
     confirm_new_password = request.form.get('confirm_new_password')
 
+    # Security check: Ensure matching confirmation before proceeding
     if new_password != confirm_new_password:
         flash("New passwords do not match.", "password_error")
         return redirect('/settings')
@@ -70,6 +79,7 @@ def change_password():
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     try:
+        # Verify the identity of the user via current password hash
         cursor.execute("SELECT password_hash FROM User_Login WHERE email = ?", (user_email,))
         user = cursor.fetchone()
         if user and user[0] == hash_password(current_password):
@@ -87,6 +97,7 @@ def change_password():
 
     return redirect('/settings')
 
+# BIDDER MANAGEMENT
 # Min Goo: discord me if have any questions or need clarification
 # Bidder Home page, loads the main dashboard data for bidder_home page, shows trending auctions, recent bids, unpaid bids, completed bids
 @app.route('/bidder')
@@ -171,6 +182,7 @@ def auction_detail(seller_email, listing_id):
     card_count = cur.fetchone()['total']
 
     # this gets all the auction infos, calculates current bid - total and min bid for next bid, and seller rating
+    # Subqueries are used here to aggregate bid data and calculate ratings without multiple DB round-trips
     cur.execute("""
         select
             a.Listing_ID as listing_id,
@@ -429,6 +441,7 @@ def place_bid():
         db.close()
 
     return redirect(url_for('auction_detail', seller_email=seller_email_input, listing_id=listing_id))
+
 @app.route('/submit_rating', methods=['POST'])
 def submit_rating():
     if not bidder_only():
@@ -485,6 +498,7 @@ def submit_rating():
 
     return redirect(url_for('auction_detail', seller_email=seller, listing_id=listing_id))
 
+# SELLER DASHBOARD
 @app.route('/seller')
 def seller():
     if 'user_email' not in session or session.get('account_type') != '/seller':
@@ -495,6 +509,7 @@ def seller():
     cursor = conn.cursor()
     top_categories = get_top_categories(cursor)
 
+    # Fetches all listings for the logged-in seller, joining with Bids to get current activity
     cursor.execute(
         '''
         SELECT al.Listing_ID,
@@ -521,6 +536,7 @@ def seller():
     sold_listings = []
     pending_listings = []
 
+    # Sorts listings into separate buckets for the multi-tab dashboard UI
     for row in cursor.fetchall():
         listing = {
             'listing_id': row[0],
@@ -595,6 +611,7 @@ def remove_listing(listing_id):
 
         remaining_bids = max_bids - bid_count
 
+        # Archiving the removal event in a separate table for audit purposes
         cursor.execute(
             '''
             INSERT INTO Listing_Removals (seller_email, listing_id, removal_reason, remaining_bids)
@@ -660,6 +677,7 @@ def edit_listing(listing_id):
     status = row[8]
     bid_count = row[9]
 
+    # Rules: Sold items cannot be changed, and bidding activity locks the listing from edits
     if status == 2:
         conn.close()
         flash("Sold listings cannot be edited.", "listing_error")
@@ -678,6 +696,7 @@ def edit_listing(listing_id):
     if request.method == 'GET':
         top_categories = get_top_categories(cursor)
         try:
+            # Cleaning the price string for numerical display in input field
             reserve_numeric = float(str(row[5]).replace('$', '').replace(',', '').strip())
         except (ValueError, AttributeError):
             reserve_numeric = 0.0
@@ -696,6 +715,7 @@ def edit_listing(listing_id):
         conn.close()
         return render_template('edit_listing.html', item=item, top_categories=top_categories)
 
+    # UPDATING THE LISTING DATA
     auction_title = request.form.get('auction_title', '').strip()
     product_name = request.form.get('product_name', '').strip()
     product_description = request.form.get('product_description', '').strip()
@@ -731,16 +751,16 @@ def edit_listing(listing_id):
             cursor.execute(
                 '''
                 UPDATE Auction_Listings
-                SET Auction_Title       = ?,
-                    Product_Name        = ?,
+                SET Auction_Title = ?,
+                    Product_Name = ?,
                     Product_Description = ?,
-                    Category            = ?,
-                    Reserve_Price       = ?,
-                    Quantity            = ?,
-                    Max_bids            = ?,
-                    is_promoted         = 1,
+                    Category = ?,
+                    Reserve_Price = ?,
+                    Quantity = ?,
+                    Max_bids = ?,
+                    is_promoted = 1,
                     promotion_timestamp = CURRENT_TIMESTAMP,
-                    promotion_fee       = ?
+                    promotion_fee = ?
                 WHERE Listing_ID = ?
                   AND Seller_Email = ?
                 ''',
@@ -751,13 +771,13 @@ def edit_listing(listing_id):
             cursor.execute(
                 '''
                 UPDATE Auction_Listings
-                SET Auction_Title       = ?,
-                    Product_Name        = ?,
+                SET Auction_Title = ?,
+                    Product_Name = ?,
                     Product_Description = ?,
-                    Category            = ?,
-                    Reserve_Price       = ?,
-                    Quantity            = ?,
-                    Max_bids            = ?
+                    Category = ?,
+                    Reserve_Price = ?,
+                    Quantity = ?,
+                    Max_bids = ?
                 WHERE Listing_ID = ?
                   AND Seller_Email = ?
                 ''',
@@ -791,6 +811,7 @@ def list_product():
     max_bids = request.form.get('max_bids')
     promote_auction = request.form.get('promote_auction') == 'yes'
 
+    # Re-rendering function to avoid code duplication on error/success states
     def render_seller(**kwargs):
         conn = sql.connect(DB_NAME)
         cursor = conn.cursor()
@@ -857,6 +878,7 @@ def list_product():
             **kwargs,
         )
 
+    # INPUT VALIDATION
     if not all([auction_title, product_name, product_description, category, reserve_price, quantity, max_bids]):
         return render_seller(listing_error="Please fill out all required fields.")
 
@@ -874,6 +896,7 @@ def list_product():
     try:
         formatted_price = f"${reserve_price_num:,.2f}"
 
+        # Logic to generate next unique Listing_ID for this specific seller
         cursor.execute("SELECT COALESCE(MAX(Listing_ID), 0) + 1 FROM Auction_Listings WHERE Seller_Email = ?",
                        (seller_email,))
         new_listing_id = cursor.fetchone()[0]
@@ -911,6 +934,7 @@ def list_product():
     finally:
         conn.close()
 
+# TRANSACTION PROCESSING
 @app.route('/checkout/<seller_email>/<int:listing_id>')
 def checkout(seller_email, listing_id):
     if not bidder_only():
@@ -939,7 +963,7 @@ def checkout(seller_email, listing_id):
         bidder_msg('danger', 'This auction is not ready for checkout.')
         return redirect(url_for('bidder'))
 
-    # 2. Verify User is the Winner and Get Amount Due
+    # Verify User is the Winner and Get Amount Due
     cur.execute("""
         SELECT Bidder_Email, Bid_Price
         FROM Bids
@@ -948,6 +972,7 @@ def checkout(seller_email, listing_id):
     """, (listing_id, seller_email))
     winning_bid = cur.fetchone()
 
+    # Ensure only the auction winner can access the checkout page
     if not winning_bid or winning_bid['Bidder_Email'] != me:
         db.close()
         bidder_msg('danger', 'You are not the winning bidder for this auction.')
@@ -1008,6 +1033,7 @@ def process_payment():
     cur = db.cursor()
 
     try:
+        # Handles new card insertion if user opts to add a new method during checkout
         if selected_card == 'new':
             card_type = request.form.get('card_type')
             cc_num = request.form.get('credit_card_num')
@@ -1023,6 +1049,7 @@ def process_payment():
 
             selected_card = cc_num
         else:
+            # Verification of existing payment method
             cur.execute("""
                         SELECT 1
                         FROM Credit_Cards
@@ -1051,6 +1078,7 @@ def process_payment():
 
         db.commit()
         bidder_msg('success', 'Payment successful! Transaction complete.')
+        # Automated notification for the seller regarding the payout
         create_notification(seller_email, f"Payment of ${amount_due} received from {me} for listing #{listing_id}.",
                             url_for('seller'))
 
@@ -1061,6 +1089,8 @@ def process_payment():
     finally:
         db.close()
     return redirect(url_for('auction_detail', seller_email=seller_email, listing_id=listing_id))
+
+# SUPPORT & WATCHLIST
 @app.route('/contact')
 def contact():
     if 'user_email' not in session:
@@ -1084,6 +1114,7 @@ def toggle_watchlist():
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     try:
+        # Check if the item is already tracked
         cursor.execute(
             '''
             SELECT 1
@@ -1094,6 +1125,7 @@ def toggle_watchlist():
             (bidder_email, listing_id),
         )
 
+        # Toggle: if it exists, remove it; if not, add it
         if cursor.fetchone():
             cursor.execute(
                 '''
@@ -1181,6 +1213,7 @@ def watchlist():
     )
 
 
+# SETTINGS & PROFILE
 @app.route('/settings')
 def settings():
     if 'user_email' not in session:
@@ -1261,6 +1294,7 @@ def add_card():
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     try:
+        # Prevent registration of duplicate credit card numbers
         cursor.execute("SELECT 1 FROM Credit_Cards WHERE credit_card_num = ?", (card_num,))
         if cursor.fetchone():
             flash("This card number is already registered.", "card_error")
@@ -1320,6 +1354,7 @@ def update_bank():
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     try:
+        # Ensure only registered sellers can store routing/account info
         cursor.execute("SELECT 1 FROM Sellers WHERE email = ?", (email,))
         if not cursor.fetchone():
             flash("Only sellers can update bank info.", "bank_error")
@@ -1337,6 +1372,7 @@ def update_bank():
     return redirect('/settings')
 
 
+# SEARCH & CATEGORIES
 @app.route('/get_subcategories')
 def get_subcategories():
     parent = request.args.get('parent')
@@ -1347,7 +1383,7 @@ def get_subcategories():
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
 
-    # Query ONLY the direct children of the requested parent
+    # Query ONLY the direct children of the requested parent for the dynamic drill-down UI
     cursor.execute("SELECT category_name FROM Categories WHERE parent_category = ?", (parent,))
     subcategories = [row[0] for row in cursor.fetchall()]
     conn.close()
@@ -1359,6 +1395,7 @@ def search():
     if 'user_email' not in session:
         return redirect('/')
 
+    # GETTING SEARCH PARAMETERS
     query = request.args.get('q', '').strip()
     selected_category = request.args.get('category', '').strip()
     min_price = request.args.get('min_price', '').strip()
@@ -1374,6 +1411,7 @@ def search():
     having_clauses = []
     breadcrumbs = []
 
+    # Dynamic SQL for Keyword Search
     if query:
         where_clauses.append("""
             (al.Auction_Title LIKE ? 
@@ -1386,6 +1424,7 @@ def search():
         kw = f'%{query}%'
         params.extend([kw, kw, kw, kw, kw, kw])
 
+    # Dynamic SQL for Category Hierarchy Filtering
     if selected_category:
         breadcrumbs = get_category_breadcrumbs(cursor, selected_category)
         descendants = get_category_descendants(cursor, selected_category)
@@ -1393,9 +1432,11 @@ def search():
         where_clauses.append(f"al.Category IN ({placeholders})")
         params.extend(descendants)
 
+    # Casting formatted strings (e.g. '$1,200') to REAL for numerical comparison
     price_expr_reserve = "CAST(REPLACE(REPLACE(al.Reserve_Price, '$', ''), ',', '') AS REAL)"
     price_expr_bid = "COALESCE(MAX(b.Bid_Price), 0)"
 
+    # Price Filtering: Logic differs depending on whether user is filtering by the Hidden Reserve or Current Bid
     if price_type == 'reserve':
         if min_price:
             where_clauses.append(f"{price_expr_reserve} >= ?")
@@ -1404,6 +1445,7 @@ def search():
             where_clauses.append(f"{price_expr_reserve} <= ?")
             params.append(float(max_price))
     else:
+        # Aggregated bid data requires a HAVING clause rather than WHERE
         if min_price:
             having_clauses.append(f"{price_expr_bid} >= ?")
             params.append(float(min_price))
@@ -1439,6 +1481,7 @@ def search():
     if having_clauses:
         sql_query += " HAVING " + " AND ".join(having_clauses)
 
+    # Promoted items are given top priority in the search results
     sql_query += " ORDER BY al.is_promoted DESC, al.Listing_ID DESC"
 
     cursor.execute(sql_query, params)
@@ -1503,6 +1546,7 @@ def promote_auction():
                 except ValueError:
                     res_val = 0.0
 
+                # Promotion fee is calculated as a flat 5% of the reserve price
                 fee = res_val * 0.05
 
                 cursor.execute("""
