@@ -165,7 +165,13 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="btn btn-navy mt-3">Create Listing</button>
+                    <div class="form-group form-check bg-light p-3 border rounded mt-3 mb-4">
+                        <input type="checkbox" class="form-check-input ml-1" id="promoteListing" name="promote_auction" value="yes">
+                        <label class="form-check-label font-weight-bold ml-4 text-dark" for="promoteListing">Promote this auction</label>
+                        <small class="d-block text-muted ml-4 mt-1">A one-time fee equal to 5% of your reserve price will be charged. Promoted items are pinned to the top of search results and category pages.</small>
+                    </div>
+
+                    <button type="submit" class="btn btn-navy">Create Listing</button>
                 </form>
             </div>
         </div>
@@ -331,6 +337,7 @@ $(document).ready(function() {
 
         $currentSelect.nextAll('.dynamic-category').remove();
 
+        // set the hidden input to the deepest selected category so far so we use this
         $('#final_category_input').val(selectedValue);
 
         if (selectedValue) {
@@ -338,16 +345,14 @@ $(document).ready(function() {
 
                 if (data.subcategories && data.subcategories.length > 0) {
 
-                    var $newSelect = $('<select class="form-control dynamic-category mb-2" required></select>');
-                    $newSelect.append('<option value="" selected disabled>Select Subcategory...</option>');
+                    var $newSelect = $('<select class="form-control dynamic-category mb-2"></select>');
+                    $newSelect.append('<option value="" selected disabled>Select Subcategory (Optional)...</option>');
 
                     data.subcategories.forEach(function(child) {
                         $newSelect.append('<option value="' + child + '">' + child + '</option>');
                     });
 
                     $currentSelect.after($newSelect);
-
-                    $('#final_category_input').val('');
                 }
             });
         }
