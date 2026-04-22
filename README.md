@@ -262,10 +262,184 @@ Project_Root/
 ---
 
 ## Instructions on how to initialize database
-1. Open MySql.
-2. Create table framework.
-3. Import csv files into their respected table.
-4. Save as db file. 
+
+The project database is created from the provided CSV files by importing each CSV into a SQLite table.
+The Flask app expects the database file to be named `dataset_tables.db`, so make sure the output database uses that name.
+
+### Prerequisites
+* Python 3.x installed
+* pandas installed
+* All CSV dataset files placed in the same folder as the database creation script
+
+If pandas is not installed, run:
+
+```bash
+pip install pandas
+```
+
+### CSV files used
+The database creation script loads the following CSV files:
+
+```text
+Address.csv
+Auction_Listings.csv
+Bidders.csv
+Bids.csv
+Categories.csv
+Credit_Cards.csv
+Helpdesk.csv
+Local_Vendors.csv
+Ratings.csv
+Requests.csv
+Sellers.csv
+Transactions.csv
+Users.csv
+Zipcode_Info.csv
+```
+
+### Database creation script
+Create or run a Python script with the following code:
+
+```python
+import sqlite3
+import pandas as pd
+import os
+import hashlib
+
+# Folder where the CSV files are located.
+folder_path = "."
+
+# The Flask app uses this exact database filename.
+db_name = "dataset_tables.db"
+
+# Connect to SQLite database. This creates the file if it does not exist.
+conn = sqlite3.connect(db_name)
+cursor = conn.cursor()
+
+# Match each CSV file to the table name it should become in SQLite.
+files = {
+    "Address.csv": "Address",
+    "Auction_Listings.csv": "Auction_Listings",
+    "Bidders.csv": "Bidders",
+    "Bids.csv": "Bids",
+    "Categories.csv": "Categories",
+    "Credit_Cards.csv": "Credit_Cards",
+    "Helpdesk.csv": "Helpdesk",
+    "Local_Vendors.csv": "Local_Vendors",
+    "Ratings.csv": "Ratings",
+    "Requests.csv": "Requests",
+    "Sellers.csv": "Sellers",
+    "Transactions.csv": "Transactions",
+    "Zipcode_Info.csv": "Zipcode_Info"
+}
+
+# The app checks passwords by comparing SHA-256 hashes in User_Login.password_hash.
+def hash_password(password):
+    return hashlib.sha256(str(password).encode()).hexdigest()
+
+# Read each regular CSV file and write it into the SQLite database as a table.
+for file_name, table_name in files.items():
+    file_path = os.path.join(folder_path, file_name)
+
+    if os.path.exists(file_path):
+        print(f"Loading {file_name} into table {table_name}...")
+        df = pd.read_csv(file_path)
+
+        df.to_sql(table_name, conn, if_exists="replace", index=False)
+    else:
+        print(f"File not found: {file_name}")
+
+# Users.csv is handled separately because the project keeps two user tables:
+# users_raw stores the original plain password data, while User_Login stores
+# the hashed password data used by the login system.
+users_path = os.path.join(folder_path, "Users.csv")
+
+if os.path.exists(users_path):
+    print("Loading Users.csv into users_raw and User_Login...")
+    users_df = pd.read_csv(users_path)
+
+    # Keep an untouched copy for reference/debugging only. Do not use this table
+    # for login because it may contain actual plain text passwords.
+    users_df.to_sql("users_raw", conn, if_exists="replace", index=False)
+
+    login_df = users_df.copy()
+
+    if "password" in login_df.columns:
+        login_df["password_hash"] = login_df["password"].apply(hash_password)
+        login_df = login_df.drop(columns=["password"])
+    elif "password_hash" in login_df.columns:
+        login_df["password_hash"] = login_df["password_hash"].astype(str)
+
+    login_df.to_sql("User_Login", conn, if_exists="replace", index=False)
+else:
+    print("File not found: Users.csv")
+
+# Create a simple row-count summary table for checking the import.
+summary_data = []
+
+for table_name in list(files.values()) + ["users_raw", "User_Login"]:
+    try:
+        count = cursor.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+        summary_data.append((table_name, count))
+    except sqlite3.Error:
+        pass
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS dataset_summary (
+    table_name TEXT,
+    row_count INTEGER
+)
+""")
+
+cursor.executemany(
+    "INSERT INTO dataset_summary (table_name, row_count) VALUES (?, ?)",
+    summary_data
+)
+
+conn.commit()
+conn.close()
+
+print("Database created successfully!")
+```
+
+### Running the script
+1. Place the script in the same folder as the CSV files.
+2. Run the script:
+
+```bash
+python create_database.py
+```
+
+3. Confirm that `dataset_tables.db` was created.
+4. Move or keep `dataset_tables.db` in the same folder as `app.py`.
+5. Run the Flask app:
+
+```bash
+python app.py
+```
+
+When `app.py` starts, it also runs `init_db()` from `utils.py`. This adds or updates the extra application tables used by newer features, such as notifications, watchlist, listing removals, and ratings.
+
+### Handling user passwords correctly
+The project creates two different user tables from `Users.csv`:
+
+* `users_raw` stores the original CSV data, including the actual plain text password if one is provided.
+* `User_Login` stores the login-safe version used by the Flask app, where the password is stored in `password_hash`.
+
+`Users.csv` should either include:
+
+* `email` and `password`, where `password` is plain text and the script hashes it into `password_hash`
+* `email` and `password_hash`, where `password_hash` is already a SHA-256 hash
+
+To manually hash a password with SHA-256, run:
+
+```python
+import hashlib
+
+hashlib.sha256("yourPasswordHere".encode()).hexdigest()
+```
+
+The result should be stored in the `password_hash` column of the `User_Login` table. The original password can remain in `users_raw` for dataset reference, but the app should authenticate against `User_Login`. This matches the `hash_password()` function in `utils.py`.
 
 ## Instructions on how to run the code
 
