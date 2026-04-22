@@ -81,11 +81,6 @@
 
                         <a class="dropdown-item" href="{{ url_for('notif.notifications') }}">Notifications</a>
 
-                        {# Bidder-only Contact Us in dropdown #}
-                        {% if session.get('account_type') == '/bidder' %}
-                            <a class="dropdown-item" href="/contact">Contact Us</a>
-                        {% endif %}
-
                         <div class="dropdown-divider"></div>
                         <a class="dropdown-item text-danger" href="{{ url_for('auth.logout') }}">Logout</a>
                     </div>

@@ -50,6 +50,19 @@ def init_db():
                    """)
 
     cursor.execute("""
+                   CREATE TABLE IF NOT EXISTS Listing_Removals
+                   (
+                       seller_email   TEXT    NOT NULL,
+                       listing_id     INTEGER NOT NULL,
+                       removal_reason TEXT    NOT NULL,
+                       remaining_bids INTEGER NOT NULL,
+                       removed_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                       PRIMARY KEY (seller_email, listing_id),
+                       FOREIGN KEY (seller_email, listing_id) REFERENCES Auction_Listings (Seller_Email, Listing_ID)
+                   )
+                   """)
+
+    cursor.execute("""
                    CREATE TABLE IF NOT EXISTS Ratings
                    (
                        Rating_ID    INTEGER PRIMARY KEY AUTOINCREMENT,
