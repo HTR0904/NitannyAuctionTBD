@@ -149,7 +149,7 @@ def register():
                 INSERT INTO Requests (sender_email, helpdesk_staff_email, request_type, request_desc, request_status)
                 VALUES (?, ?, ?, ?, ?)
                 ''',
-                (email, DEFAULT_HELPDESK_EMAIL, 'Registration', position, 0),  # 0: incomplete [cite: 15]
+                (email, DEFAULT_HELPDESK_EMAIL, 'Registration', position, 0),  # 0: incomplete
             )
 
         #  BIDDER & SELLER
