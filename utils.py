@@ -7,6 +7,7 @@ import csv
 from xml.sax.saxutils import escape
 from flask import session
 
+# PATH & DATABASE CONFIGURATION
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = os.path.join(BASE_DIR, "dataset_tables.db")
 
@@ -14,8 +15,6 @@ DB_NAME = os.path.join(BASE_DIR, "dataset_tables.db")
 # Helpdesk staff can then claim those tickets from the dashboard.
 DEFAULT_HELPDESK_EMAIL = "helpdeskteam@lsu.edu"
 
-# The Requests table stores status as integers, while the UI works with
-# readable labels. These maps keep the database and form values in sync.
 REQUEST_STATUS = {
     0: "Open",
     1: "In Progress",
@@ -24,10 +23,16 @@ REQUEST_STATUS = {
 REQUEST_STATUS_VALUE = {label: value for value, label in REQUEST_STATUS.items()}
 
 def hash_password(password):
+    # Standardizes password security by generating a SHA-256 hex digest
     return hashlib.sha256(password.encode()).hexdigest()
 
 
+# DATABASE INITIALIZATION
 def init_db():
+    """
+    Initializes the relational schema and handles incremental migrations.
+    Creates essential tables for core features like Notifications and Watchlists.
+    """
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
@@ -82,6 +87,7 @@ def init_db():
                    )
                    """)
 
+    # Ensure Ratings table supports Listing_ID for transaction tracking
     cursor.execute("PRAGMA table_info(Ratings)")
     columns = [col[1] for col in cursor.fetchall()]
 
@@ -91,6 +97,7 @@ def init_db():
         except sql.Error:
             pass
 
+    # Add promotion-related columns to existing Auction_Listings table
     cursor.execute("PRAGMA table_info(Auction_Listings)")
     al_columns = [col[1] for col in cursor.fetchall()]
 
@@ -102,6 +109,7 @@ def init_db():
         except sql.Error:
             pass
 
+    # Ensure removal tracking table exists for seller dashboard integrity
     cursor.execute("""
                    CREATE TABLE IF NOT EXISTS Listing_Removals
                    (
@@ -118,6 +126,7 @@ def init_db():
     conn.close()
 
 def create_notification(user_email, content, link=None):
+    # Inserts a new alert into the database to be rendered by the global navbar processor
     conn = sql.connect(DB_NAME, timeout=20)
     cursor = conn.cursor()
     cursor.execute(
@@ -127,21 +136,28 @@ def create_notification(user_email, content, link=None):
     conn.commit()
     conn.close()
 
-# Bidder ##############################################
+# BIDDER HELPERS ##############################################
 
 def db_connect():
+    # Standardized connection
     db = sql.connect(DB_NAME)
     db.row_factory = sql.Row
     return db
 
 def bidder_only():
+    # Used in routes to restrict access to bidder accounts
     return 'user_email' in session and session.get('account_type') == '/bidder'
 
 def bidder_msg(kind, text):
+    # Helper to queue alert messages for the next bidder page render.
     session['bidder_msg'] = {'kind': kind, 'text': text}
 
 
 def auction_sql(extra_where="", ending=""):
+    """
+    SQL builder for fetching auction listings.
+    Includes subqueries for real-time bid counts, leader calculations, and seller ratings.
+    """
     return f"""
         SELECT
             a.Listing_ID AS listing_id,
@@ -189,6 +205,10 @@ def auction_sql(extra_where="", ending=""):
     """
 
 def load_my_bids(cur, me, limit=None):
+    """
+    Aggregates all auctions the current user has participated in.
+    Determines standing (Winning, Outbid, etc.) based on active status and high bidder subqueries.
+    """
     cur.execute(f"""
         SELECT
             a.Listing_ID AS listing_id,
@@ -249,6 +269,7 @@ def load_my_bids(cur, me, limit=None):
 
     rows = []
 
+    # Map database results to UI-friendly standing labels
     for row in cur.fetchall():
         item = dict(row)
         item['status'] = 'Active' if item['status_code'] == 1 else 'Closed'
@@ -271,6 +292,7 @@ def load_my_bids(cur, me, limit=None):
     return rows
 
 def load_awaiting_payment_items(cur, me, limit=None):
+    """Filters auctions where the bidder is the winner but has not yet processed a transaction."""
     cur.execute(f"""
         SELECT
             a.Listing_ID AS listing_id,
@@ -314,6 +336,7 @@ def load_awaiting_payment_items(cur, me, limit=None):
     return cur.fetchall()
 
 def load_completed_items(cur, me, limit=None):
+    # Fetches paid transactions and associated ratings for the user history dashboard
     cur.execute(f"""
         SELECT
             t.Transaction_ID AS transaction_id,
@@ -341,11 +364,13 @@ def load_completed_items(cur, me, limit=None):
     return cur.fetchall()
 
 def limit_clause(limit):
+    # Utility to safely append LIMIT constraints to SQL queries
     if limit is None:
         return ""
     return f"LIMIT {max(1, int(limit))}"
 
 def load_ratings(cur, me):
+    # Fetches the 30 most recent transaction-based ratings for the current user.
     cur.execute("""
         SELECT
             t.Transaction_ID AS transaction_id,
@@ -371,15 +396,17 @@ def load_ratings(cur, me):
 
     return cur.fetchall()
 
-# Helpdesk ##############################################
+# HELPDESK & USER MANAGEMENT ##############################################
 
 def get_connection(row_factory=False):
+    # Returns a standalone SQLite connection; optionally configures row-name mapping
     conn = sql.connect(DB_NAME)
     if row_factory:
         conn.row_factory = sql.Row
     return conn
 
 def resolve_full_name(email):
+    # Get display names for UI presentation
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -398,11 +425,11 @@ def resolve_full_name(email):
     return email.split("@")[0].replace(".", " ").title()
 
 def ensure_app_user(email, role):
-    """Legacy compatibility hook; real account tables are now the source of truth."""
+    # Legacy compatibility hook; real account tables are now the source of truth.
     pass
 
 def get_app_user(email):
-    """Return display and role details for one account from the real login/role tables."""
+    # Return display and role details for one account from the real login/role tables.
     conn = get_connection(row_factory=True)
     user = conn.execute(
         """
@@ -433,7 +460,7 @@ def get_app_user(email):
     return user
 
 def authenticate_app_user(email, password, role):
-    """Validate a password hash and confirm the account belongs to the selected role table."""
+    # Validate a password hash and confirm the account belongs to the selected role table
     conn = get_connection(row_factory=True)
     row = conn.execute("SELECT password_hash FROM User_Login WHERE email = ?", (email,)).fetchone()
     if not row or row["password_hash"] != hash_password(password):
@@ -445,7 +472,7 @@ def authenticate_app_user(email, password, role):
     return bool(member)
 
 def split_full_name(full_name):
-    """Split a form full name into the first/last columns used by the Bidders table."""
+    # Split a form full name into the first/last columns used by the Bidders table
     parts = full_name.strip().split()
     if not parts:
         return "", ""
@@ -454,7 +481,7 @@ def split_full_name(full_name):
     return parts[0], " ".join(parts[1:])
 
 def create_helpdesk_account(full_name, email, password, role):
-    """Create an account in User_Login and then add the matching bidder/seller/helpdesk row."""
+   # Create an account in User_Login and then add the matching bidder/seller/helpdesk row
     if not all([full_name, email, password, role]):
         return False, "Please complete all account creation fields."
     if role not in ("bidder", "seller", "helpdesk"):
@@ -497,7 +524,7 @@ def create_helpdesk_account(full_name, email, password, role):
         conn.close()
 
 def update_real_user(email, full_name, role):
-    """Move or update a user across the real role membership tables."""
+    # Move or update a user across the real role membership tables.
     if not email:
         return False, "Please select a user email to update."
 
@@ -523,7 +550,7 @@ def update_real_user(email, full_name, role):
             if role not in ("bidder", "seller", "helpdesk"):
                 return False, "Please choose a valid account role."
             first_name, last_name = split_full_name(full_name or resolve_full_name(email))
-            # Sellers are also bidders in this schema, so seller accounts keep
+            # Sellers are also bidders, so seller accounts keep
             # their Bidders row and receive an additional Sellers row.
             if role in ("bidder", "seller"):
                 cursor.execute("DELETE FROM Helpdesk WHERE email = ?", (email,))
@@ -563,7 +590,7 @@ def update_real_user(email, full_name, role):
         conn.close()
 
 def create_real_category(parent_category, category_name):
-    """Insert a new category row using the existing parent/child category structure."""
+    # Insert a new category row using the existing parent/child category structure
     parent_category = parent_category or "Root"
     category_name = (category_name or "").strip()
     if not category_name:
@@ -582,7 +609,7 @@ def create_real_category(parent_category, category_name):
         conn.close()
 
 def create_request_ticket(sender_email, request_type, description):
-    """Create a Requests row and assign it to the shared helpdesk queue by default."""
+    # Create a Requests row and assign it to the shared helpdesk queue by default
     if not request_type or not description:
         return False, "Please fill out all helpdesk fields."
     conn = get_connection()
@@ -603,10 +630,9 @@ def create_request_ticket(sender_email, request_type, description):
 
 
 def update_request_ticket(ticket_id, staff_email, status_label, assigned_email=None, assign_to_me=False):
-    """Update ticket status/assignment only when the staff member owns or can claim it."""
+    # Update ticket status/assignment only when the staff member owns or can claim it.
     status_value = REQUEST_STATUS_VALUE.get(status_label, 0)
 
-    # Assign-to-me takes priority over hidden assignment form values so a queue
     # ticket always becomes owned by the current helpdesk staff member.
     assignment = staff_email if assign_to_me else (assigned_email or staff_email)
 
@@ -636,7 +662,6 @@ def collect_helpdesk_context():
     staff_email = session.get("user_email")
 
     # Fetch all accounts for the admin directory, deriving each role from the
-    # role membership tables instead of a dummy/admin-only user list.
     users = conn.execute(
         """
         SELECT
@@ -687,7 +712,7 @@ def collect_helpdesk_context():
             "status_code": row["request_status"]
         })
 
-    # Top-level categories power the "add category" form parent selector.
+    # Top-level categories for the "add category" form selector.
     raw_top_categories = conn.execute(
         "SELECT category_name FROM Categories WHERE parent_category = 'Root' ORDER BY category_name"
     ).fetchall()
@@ -719,9 +744,10 @@ def collect_helpdesk_context():
         }
     }
 
-# Admin export functions
+# ADMIN EXPORT FUNCTIONS ##############################################
+
 def build_export_rows():
-    """Flatten ticket, sender, and role information into rows for CSV/XLSX export."""
+    # Flatten ticket, sender, and role information into rows for CSV/XLSX export.
     conn = get_connection(row_factory=True)
     rows = conn.execute(
         """
@@ -774,7 +800,7 @@ def build_export_rows():
     return export_rows
 
 def build_csv_bytes(rows):
-    """Serialize export rows into a downloadable in-memory CSV file."""
+    # Serialize export rows into a downloadable in-memory CSV file.
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=list(rows[0].keys()) if rows else ["Message"])
     writer.writeheader()
@@ -785,12 +811,12 @@ def build_csv_bytes(rows):
     return io.BytesIO(buffer.getvalue().encode("utf-8"))
 
 def build_xlsx_bytes(rows):
-    """Build a minimal XLSX workbook in memory without adding a third-party dependency."""
+    # Build a minimal XLSX workbook in memory without adding a third-party dependency.
     headers = list(rows[0].keys()) if rows else ["Message"]
     data_rows = rows if rows else [{"Message": "No records available"}]
 
     def col_name(index):
-        """Convert a 1-based column number into Excel letters such as A, B, AA."""
+        #Convert a 1-based column number into Excel letters (like A, B, AA).
         result = ""
         while index:
             index, remainder = divmod(index - 1, 26)
@@ -801,7 +827,7 @@ def build_xlsx_bytes(rows):
     shared_index = {}
 
     def string_id(value):
-        """Store repeated cell strings once, then reference them by shared-string index."""
+        # Store repeated cell strings once, then reference them by shared-string index
         if value not in shared_index:
             shared_index[value] = len(shared_strings)
             shared_strings.append(value)
@@ -812,9 +838,11 @@ def build_xlsx_bytes(rows):
     for row_number, values in enumerate(all_rows, start=1):
         cells = []
         for column_number, value in enumerate(values, start=1):
+            # Formats each cell as a shared-string type (t="s") referencing the calculated index
             cells.append(f'<c r="{col_name(column_number)}{row_number}" t="s"><v>{string_id(value)}</v></c>')
         sheet_rows.append(f'<row r="{row_number}">{"".join(cells)}</row>')
 
+    # GENERATING CORE XML STRUCTURES
     worksheet_xml = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
@@ -864,6 +892,7 @@ def build_xlsx_bytes(rows):
     )
 
     output = io.BytesIO()
+    # Manual assembly of the OpenXML zip package
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as workbook:
         workbook.writestr("[Content_Types].xml", content_types)
         workbook.writestr("_rels/.rels", root_rels)
@@ -877,7 +906,7 @@ def build_xlsx_bytes(rows):
 # CATEGORY TRANSVERSAL ###################################
 
 def get_top_categories(cursor):
-    """Fetches all categories that sit directly under 'Root'."""
+    # Fetches all categories that sit directly under 'Root'
     cursor.execute('''
                    SELECT category_name
                    FROM Categories
@@ -888,7 +917,7 @@ def get_top_categories(cursor):
 
 
 def get_category_breadcrumbs(cursor, category_name):
-    """Traverses upward from a given category to build a breadcrumb trail."""
+    # Traverses upward from a given category to build a search trail
     if not category_name:
         return []
 
@@ -905,13 +934,14 @@ def get_category_breadcrumbs(cursor, category_name):
 
 
 def get_category_descendants(cursor, category_name):
-    """Uses a BFS queue to find a category and all of its nested subcategories."""
+    # Uses a BFS queue to find a category and all of its nested subcategories
     if not category_name:
         return []
 
     descendants = [category_name]
     categories_to_check = [category_name]
 
+    # BFS to map the entire sub-tree for search filtering
     while categories_to_check:
         current = categories_to_check.pop(0)
         cursor.execute("SELECT category_name FROM Categories WHERE parent_category = ?", (current,))
