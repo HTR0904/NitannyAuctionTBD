@@ -170,7 +170,7 @@ def auction_detail(seller_email, listing_id):
     """, (me,))
     card_count = cur.fetchone()['total']
 
-    # this gets all the auction infos, calculates current bid- total and min bid for next bid, and seller rating
+    # this gets all the auction infos, calculates current bid - total and min bid for next bid, and seller rating
     cur.execute("""
         select
             a.Listing_ID as listing_id,
@@ -676,6 +676,7 @@ def edit_listing(listing_id):
         return redirect('/seller#my-listings')
 
     if request.method == 'GET':
+        top_categories = get_top_categories(cursor)
         try:
             reserve_numeric = float(str(row[5]).replace('$', '').replace(',', '').strip())
         except (ValueError, AttributeError):
@@ -693,7 +694,7 @@ def edit_listing(listing_id):
             'is_promoted': row[10] == 1
         }
         conn.close()
-        return render_template('edit_listing.html', item=item)
+        return render_template('edit_listing.html', item=item, top_categories=top_categories)
 
     auction_title = request.form.get('auction_title', '').strip()
     product_name = request.form.get('product_name', '').strip()

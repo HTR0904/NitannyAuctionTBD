@@ -76,8 +76,8 @@
                     </table>
                 </div>
 
-              {# Promote Button for Seller #}
-                {% if item.seller_email == user_email %}
+              {# Promote Button for Seller - Hidden if user is logged in as a bidder #}
+                {% if item.seller_email == user_email and session.get('account_type') != '/bidder' %}
                     {% if not item.is_promoted %}
                     <div class="mt-4 p-4 rounded box" style="background-color: #f4f7fb; border: 1px solid #dbe4f0;">
                         <div class="d-flex align-items-center mb-2">

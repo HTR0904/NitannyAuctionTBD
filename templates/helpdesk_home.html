@@ -7,15 +7,29 @@
           integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
     <title>Helpdesk Dashboard</title>
     <style>
-        :root { --navy: #041e42; --navy-soft: #153d72; --cloud: #eef3fb; }
+        :root { 
+            --navy: #041e42; 
+            --navy-soft: #153d72; 
+            --cloud: #eef3fb; 
+            --steel-blue: #2a6f97;
+            --custom-red: #85182a;
+            --custom-green: #2d6a4f;
+        }
         body { background: linear-gradient(180deg, #f4f7fb, #ffffff); }
         .bg-navy { background-color: var(--navy); }
         .text-navy { color: var(--navy) !important; }
+        
         .btn-navy { background-color: var(--navy); color: white; border: none; }
         .btn-navy:hover { color: white; background-color: var(--navy-soft); }
 
         .btn-outline-navy { color: var(--navy); border: 1px solid var(--navy); background-color: transparent; }
         .btn-outline-navy:hover { background-color: var(--navy); color: white; }
+
+        .btn-custom-green { background-color: var(--custom-green); color: white; border: none; }
+        .btn-custom-green:hover { background-color: #1b4332; color: white; }
+
+        .btn-outline-custom-red { color: var(--custom-red); border: 1px solid var(--custom-red); background: transparent; }
+        .btn-outline-custom-red:hover { background-color: var(--custom-red); color: white; }
 
         .metric-card, .work-card { background: white; border: 0; border-radius: 20px; box-shadow: 0 18px 42px rgba(4, 30, 66, 0.08); }
         .hero-panel {
@@ -27,7 +41,10 @@
         .table-wrap { max-height: 400px; overflow: auto; }
         .pill { display: inline-block; border-radius: 999px; padding: 0.25rem 0.75rem; background: var(--cloud); color: var(--navy); font-size: 0.85rem; font-weight: 600; }
         .form-control { min-height: 48px; font-size: 1rem; border-radius: 8px; }
-        .ticket-tools .form-control { min-height: 38px; min-width: 140px; font-size: 0.9rem; }
+
+        .ticket-tools { gap: 8px; }
+        .ticket-tools .form-control { min-height: 34px; min-width: 120px; font-size: 0.85rem; border-radius: 4px; }
+        
         .navbar .nav-link { color: rgba(255,255,255,0.85) !important; }
         .navbar .nav-link:hover { color: #fff !important; }
         .section-header { border-left: 5px solid var(--navy); padding-left: 15px; margin-bottom: 20px; }
@@ -35,10 +52,6 @@
 
         .work-card table td { vertical-align: middle !important; padding: 1.1rem 0.75rem !important; }
         .ticket-subject { line-height: 1.4; display: block; margin-bottom: 4px; }
-
-        .btn-success { background-color: #28a745; border: none; }
-        .btn-outline-danger { color: #dc3545; border: 1px solid #dc3545; background: transparent; }
-        .btn-outline-danger:hover { background-color: #dc3545; color: white; }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ui-polish.css') }}">
 </head>
@@ -87,12 +100,14 @@
                 <p class="lead mb-0">Unified management for staff approvals, ticket moderation, and category hierarchy.</p>
             </div>
             <div class="col-lg-5 mt-4 mt-lg-0">
-                <div class="bg-white text-dark rounded p-4">
+                <div class="bg-white text-dark rounded p-4 shadow-sm">
                     <div class="small text-muted text-uppercase font-weight-bold">Export center</div>
                     <h4 class="font-weight-bold mt-2">Data Reporting</h4>
                     <p class="text-muted">Download joined helpdesk records.</p>
-                    <a href="/helpdesk/export/csv" class="btn btn-outline-dark mr-2">Export CSV</a>
-                    <a href="/helpdesk/export/xlsx" class="btn btn-navy">Export XLSX</a>
+                    <div class="d-flex">
+                        <a href="/helpdesk/export/csv" class="btn btn-outline-navy mr-2">Export CSV</a>
+                        <a href="/helpdesk/export/xlsx" class="btn btn-navy">Export XLSX</a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -161,7 +176,7 @@
                             <input type="password" class="form-control" name="password" value="password123" required>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-navy">Create Account</button>
+                    <button type="submit" class="btn btn-navy px-4">Create Account</button>
                 </form>
             </div>
             <div class="col-lg-5 pl-lg-4">
@@ -190,7 +205,7 @@
                             </select>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-outline-dark">Update User</button>
+                    <button type="submit" class="btn btn-outline-navy px-4">Update User</button>
                 </form>
             </div>
         </div>
@@ -211,13 +226,13 @@
                         <td><span class="pill text-capitalize">{{ ticket["description"] }}</span></td>
                         <td><small class="text-muted">Pending Review</small></td>
                         <td>
-                            <div class="d-flex ticket-tools">
-                                <form action="/helpdesk/approve_registration/{{ ticket['id'] }}" method="POST" class="mr-2">
-                                    <button type="submit" class="btn btn-sm btn-success px-4">Approve Staff Member</button>
+                            <div class="d-flex ticket-tools align-items-center">
+                                <form action="/helpdesk/approve_registration/{{ ticket['id'] }}" method="POST">
+                                    <button type="submit" class="btn btn-sm btn-custom-green px-3">Approve Staff</button>
                                 </form>
                                 <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST">
                                     <input type="hidden" name="status" value="Closed">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Decline</button>
+                                    <button type="submit" class="btn btn-sm btn-outline-custom-red">Decline</button>
                                 </form>
                             </div>
                         </td>
@@ -283,8 +298,8 @@
                                 </td>
                                 <td>
                                     <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" class="d-flex align-items-center ticket-tools">
-                                        <button type="submit" class="btn btn-sm btn-outline-navy mr-2" name="assign_to_me" value="1">Claim</button>
-                                        <button type="submit" class="btn btn-sm btn-navy">Save</button>
+                                        <button type="submit" class="btn btn-sm btn-outline-navy" name="assign_to_me" value="1">Claim</button>
+                                        <button type="submit" class="btn btn-sm btn-navy px-3">Save</button>
                                     </form>
                                 </td>
                             </tr>
@@ -297,10 +312,20 @@
             </div>
 
             <div class="work-card p-4 mb-4" id="active-tickets">
-                <h3 class="font-weight-bold mb-4">My Active Cases</h3>
-                <div class="table-wrap">
+                <div class="section-header">
+                    <h3 class="font-weight-bold mb-0">My Active Cases</h3>
+                </div>
+                <div class="table-wrap mt-3">
                     <table class="table table-hover">
-                        <thead class="thead-light"><tr><th>ID</th><th>Sender</th><th>Category</th><th>Status</th><th>Action</th></tr></thead>
+                        <thead class="thead-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Sender</th>
+                                <th>Category</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
                         <tbody>
                         {% for ticket in tickets if ticket["assigned_email"] == current_user["email"] and ticket["category_name"] != "Registration" %}
                             <tr>
@@ -308,18 +333,22 @@
                                 <td><small class="text-muted">{{ ticket["sender_email"] }}</small></td>
                                 <td><span class="pill">{{ ticket["category_name"] }}</span></td>
                                 <td>
-                                    <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" class="d-flex align-items-center ticket-tools">
-                                        <select class="form-control form-control-sm mr-2" name="status">
+                                    <form action="/helpdesk/update_ticket/{{ ticket['id'] }}" method="POST" id="update-form-{{ ticket['id'] }}" class="ticket-tools">
+                                        <select class="form-control form-control-sm" name="status">
                                             <option {% if ticket["status"] == "Open" %}selected{% endif %}>Open</option>
                                             <option {% if ticket["status"] == "In Progress" %}selected{% endif %}>In Progress</option>
                                             <option {% if ticket["status"] == "Closed" %}selected{% endif %}>Closed</option>
                                         </select>
-                                        <button type="submit" class="btn btn-sm btn-navy">Update</button>
                                     </form>
+                                </td>
+                                <td>
+                                    <button type="submit" form="update-form-{{ ticket['id'] }}" class="btn btn-sm btn-navy px-4">Update</button>
                                 </td>
                             </tr>
                         {% else %}
-                            <tr><td colspan="5" class="text-center py-5 text-muted">You are not currently assigned to any active support cases.</td></tr>
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">You are not currently assigned to any active support cases.</td>
+                            </tr>
                         {% endfor %}
                         </tbody>
                     </table>
@@ -346,80 +375,5 @@
 <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
-<script>
-$(document).ready(function() {
-    $('#category-container').on('change', '.dynamic-category', function() {
-        var $currentSelect = $(this);
-        var selectedValue = $currentSelect.val();
-        $currentSelect.nextAll('.dynamic-category').remove();
-        $('#final_category_input').val(selectedValue || 'Root');
-        if (selectedValue && selectedValue !== 'Root') {
-            $.getJSON('/get_subcategories', { parent: selectedValue }, function(data) {
-                if (data.subcategories && data.subcategories.length > 0) {
-                    var $newSelect = $('<select class="form-control dynamic-category mb-2"></select>');
-                    $newSelect.append('<option value="" selected disabled>Select sub-parent...</option>');
-                    data.subcategories.forEach(function(child) {
-                        $newSelect.append('<option value="' + child + '">' + child + '</option>');
-                    });
-                    $currentSelect.after($newSelect);
-                }
-            });
-        }
-    });
-
-    // Dynamic Category Tree Traversal (for the display panel)
-    $('#dynamicCatTree').on('click', '.fetch-children', function() {
-        var $header = $(this);
-        var category = $header.data('category');
-        var $childrenContainer = $header.next('.cat-children');
-        var $list = $childrenContainer.find('.children-list');
-        var $indicator = $header.find('.indicator');
-
-        // If we've already loaded the children from the database, just toggle visibility
-        if ($header.data('loaded')) {
-            $childrenContainer.slideToggle(200, function() {
-                $indicator.text($childrenContainer.is(':visible') ? '-' : '+');
-            });
-            return;
-        }
-
-        // Show a loading state
-        $indicator.text('...');
-
-        // Dynamically query the database for the next level down
-        $.getJSON('/get_subcategories', { parent: category }, function(data) {
-            $list.empty();
-
-            if (data.subcategories && data.subcategories.length > 0) {
-                data.subcategories.forEach(function(child) {
-                    // Build the HTML for the new subcategory
-                    var childHtml = `
-                        <li class="cat-node mb-1">
-                            <div class="d-flex justify-content-between align-items-center py-1 fetch-children"
-                                 data-category="${child}" style="cursor:pointer;">
-                                <span class="small">${child}</span>
-                                <button class="btn btn-sm btn-link text-navy p-0 indicator font-weight-bold">+</button>
-                            </div>
-                            <div class="cat-children nested-tree" style="display: none;">
-                                <ul class="list-unstyled mb-0 children-list"></ul>
-                            </div>
-                        </li>
-                    `;
-                    $list.append(childHtml);
-                });
-                $indicator.text('-');
-            } else {
-                // No subcategories exist in the database for this node
-                $list.append('<li class="small text-muted py-1">No subcategories</li>');
-                $indicator.text(''); // Remove the + icon since there's nothing to expand
-            }
-
-            // Mark as loaded so we don't query the DB again for this specific node
-            $header.data('loaded', true);
-            $childrenContainer.slideDown(200);
-        });
-    });
-});
-</script>
 </body>
 </html>

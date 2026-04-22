@@ -55,10 +55,19 @@
                 <textarea name="product_description" class="form-control" rows="3" required>{{ item.product_description }}</textarea>
             </div>
 
-            <div class="form-group">
-                <label>Category</label>
-                <input type="text" name="category" class="form-control" value="{{ item.category }}" required>
-                <small class="form-text text-muted">Current category shown above. Type a new category name to change it.</small>
+            <div class="form-group" id="category-container">
+                <label class="font-weight-bold">Category (Currently: <span class="text-navy">{{ item.category }}</span>)</label>
+                <div id="select-group">
+                    <select class="form-control dynamic-category mb-2" required>
+                        <option value="" selected disabled>Select to change category...</option>
+                        {% for cat in top_categories %}
+                        <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <small class="form-text text-muted">To keep the current category, do not change these dropdowns. To update, drill down to the desired subcategory.</small>
+
+                <input type="hidden" name="category" id="final_category_input" value="{{ item.category }}">
             </div>
 
             <div class="form-row align-items-end">
@@ -101,5 +110,35 @@
 <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $('#category-container').on('change', '.dynamic-category', function() {
+            var $currentSelect = $(this);
+            var selectedValue = $currentSelect.val();
+
+            // Remove any sub-dropdowns that were previously generated
+            $currentSelect.nextAll('.dynamic-category').remove();
+
+            // Update the hidden input that the form actually submits
+            if (selectedValue) {
+                $('#final_category_input').val(selectedValue);
+
+                // Fetch children of the selected category
+                $.getJSON('/get_subcategories', { parent: selectedValue }, function(data) {
+                    if (data.subcategories && data.subcategories.length > 0) {
+                        var $newSelect = $('<select class="form-control dynamic-category mb-2"></select>');
+                        $newSelect.append('<option value="" selected disabled>Select Subcategory (Optional)...</option>');
+
+                        data.subcategories.forEach(function(child) {
+                            $newSelect.append('<option value="' + child + '">' + child + '</option>');
+                        });
+
+                        $currentSelect.after($newSelect);
+                    }
+                });
+            }
+        });
+    });
+    </script>
 </body>
 </html>
