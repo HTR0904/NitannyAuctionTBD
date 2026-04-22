@@ -40,16 +40,31 @@ On the backend, the system processes registration data through the `auth.registe
 located in `auth.py`. The application first verifies that the input email is not already registered in the `User_Login` table and enforces password security by generating a SHA-256 hash using the `hash_password` utility before any data is committed. While the system populates the `User_Login` table for all users, the subsequent relational logic diverges by role. Helpdesk registration involves an insertion into the `Helpdesk` table and the simultaneous creation of a registration-type ticket in the `Requests` table with an initial status of incomplete for administrative review.
 
 For Bidder and Seller accounts, the system manages physical location data by inserting home address details into a dedicated `Address` table using unique UUIDs generated via `uuid.uuid4().hex`. Because the platform treats Sellers as a functional subset of Bidders, the application ensures that seller registrations populate both the `Bidders` and `Sellers` tables. If a seller registers as a Local Vendor, the backend performs an additional address insertion for the business location and records commercial details in the `Local_Vendors` table. After successfully committing these database transactions, the system calls the `ensure_app_user` helper and triggers a Bootstrap modal in `register.html` to confirm account creation and direct the user to the login portal.
-### Bidder homepage
 
-This page supports the bidder-facing auction flow:
-- Feature trending auctions to bidders
-- Browse products and listings
-- View current bids participated in
-- Open auction detail pages
-- Add and remove listings from the watchlist
-- Submit helpdesk requests
-- Receive notifications for watched listings and bid activity
+### Bidder Functionality
+
+This module implements core bidder actions including authentication, auction browsing, bid placement, and transaction history. The primary logic is distributed between `app.py` for routing, `utils.py` for database operations, and the frontend templates for the dashboard and history views.
+
+**Bidder Home Page**
+Managed by the `@app.route('/bidder')` route, this serves as the main dashboard following a successful login. The interface aggregates critical user data, including trending auctions, the three most recent auctions in which the bidder is participating, items awaiting payment, and a summary of completed transactions. The backend also queries the `Credit_Cards` table to verify if the user has a saved payment method, displaying a reminder if no card is found.
+
+**Bidding History Page**
+The `@app.route('/bidding_history')` route renders a comprehensive record of all auction activity associated with the bidder's account. This allows users to track their engagement with both active and closed listings in one consolidated view.
+
+**Auction Detail Page**
+Detailed information for individual listings is provided through the `@app.route('/auction/<seller_email>/<int:listing_id>')` route. This page presents exhaustive metadata, including product descriptions, category classifications, and hidden reserve price indicators. It calculates real-time financial metrics such as the current high bid and the minimum next bid. The interface also displays seller ratings, bid history, and tracking status via the watchlist integration.
+
+**Placing a Bid**
+The `@app.route('/place_bid', methods=['POST'])` route handles the bidding process and enforces several business logic constraints. The system verifies that the user is logged in as a bidder, ensures the bid amount is a whole-dollar integer, and confirms the auction is active. Additional security logic prevents bidders from placing consecutive bids on the same item and validates that each new bid exceeds the current highest bid.
+
+**Awaiting Payment Items**
+Auctions are classified as "Awaiting Payment" when the status is set to 2 (Sold), the user is the winning bidder, and no transaction record exists. This functionality is supported by the `load_awaiting_payment_items` utility. These items appear on the bidder dashboard with direct links to the checkout process.
+
+**Checkout and Payment**
+The checkout interface, accessed via `@app.route('/checkout/<seller_email>/<int:listing_id>')`, is restricted to winning bidders with pending payments. Financial processing is finalized through the `@app.route('/process_payment', methods=['POST'])` route, which records the transaction and updates the seller's balance accordingly.
+
+**Completed Items**
+The `load_completed_items` function retrieves data for finalized transactions, including transaction IDs, payment amounts, and sold dates. This view also tracks whether the bidder has provided a seller rating for the specific listing. These records are displayed on the home dashboard and within the bidding history for user reference.
 
 ### Seller homepage
 
