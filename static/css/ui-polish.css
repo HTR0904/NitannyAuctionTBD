@@ -225,3 +225,13 @@ a:hover {
         width: 100% !important;
     }
 }
+
+/* Ensure the modal appears above the navbar */
+.modal {
+    z-index: 2000 !important;
+}
+
+/* Ensure the dark backdrop also appears above the navbar */
+.modal-backdrop {
+    z-index: 1900 !important;
+}
