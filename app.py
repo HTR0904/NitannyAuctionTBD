@@ -155,7 +155,7 @@ def bidding_history():
 # also for bid history, watchlist, payment status, and seller rating options
 @app.route('/auction/<seller_email>/<int:listing_id>')
 def auction_detail(seller_email, listing_id):
-    if not bidder_only():
+    if "user_email" not in session:
         return redirect('/')
 
     me = session['user_email']
@@ -375,7 +375,7 @@ def place_bid():
                 cur.execute("update Auction_Listings set Status = 2 where Listing_ID = ? and Seller_Email = ?",
                             (listing_id, seller))
             else:
-                cur.execute("update Auction_Listings set Status = 0 where Listing_ID = ? and Seller_Email = ?",
+                cur.execute("update Auction_Listings set Status = 3 where Listing_ID = ? and Seller_Email = ?",
                             (listing_id, seller))
         db.commit()
 
@@ -511,9 +511,13 @@ def seller():
         (seller_email,),
     )
 
-    my_listings = []
+    active_listings = []
+    inactive_listings = []
+    sold_listings = []
+    pending_listings = []
+
     for row in cursor.fetchall():
-        my_listings.append({
+        listing = {
             'listing_id': row[0],
             'auction_title': row[1],
             'product_name': row[2],
@@ -523,16 +527,283 @@ def seller():
             'status': row[6],
             'bid_count': row[7],
             'current_bid': row[8],
-        })
+        }
+        if row[6] == 1:
+            active_listings.append(listing)
+        elif row[6] == 2:
+            sold_listings.append(listing)
+        elif row[6] == 3:
+            pending_listings.append(listing)
+        else:
+            inactive_listings.append(listing)
 
     conn.close()
 
     return render_template(
         'seller_home.html',
         top_categories=top_categories,
-        my_listings=my_listings
+        active_listings=active_listings,
+        inactive_listings=inactive_listings,
+        sold_listings=sold_listings,
+        pending_listings=pending_listings,
+        my_listings=active_listings + sold_listings + inactive_listings + pending_listings
     )
 
+@app.route('/remove_listing/<int:listing_id>', methods=['POST'])
+def remove_listing(listing_id):
+    if 'user_email' not in session or session.get('account_type') != '/seller':
+        return redirect('/')
+
+    seller_email = session['user_email']
+    removal_reason = request.form.get('removal_reason', '').strip()
+
+    if not removal_reason:
+        flash("Please provide a reason for removal.", "listing_error")
+        return redirect('/seller#my-listings')
+
+    conn = sql.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            '''
+            SELECT al.Status, al.Max_bids, COUNT(b.Bid_ID) AS bid_count
+            FROM Auction_Listings al
+            LEFT JOIN Bids b ON al.Listing_ID = b.Listing_ID AND al.Seller_Email = b.Seller_Email
+            WHERE al.Listing_ID = ? AND al.Seller_Email = ?
+            GROUP BY al.Listing_ID
+            ''',
+            (listing_id, seller_email)
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            flash("Listing not found or you don't own it.", "listing_error")
+            return redirect('/seller#my-listings')
+
+        status, max_bids, bid_count = row
+
+        if status != 1:
+            flash("Only active listings can be removed.", "listing_error")
+            return redirect('/seller#my-listings')
+
+        remaining_bids = max_bids - bid_count
+
+        cursor.execute(
+            '''
+            INSERT INTO Listing_Removals (seller_email, listing_id, removal_reason, remaining_bids)
+            VALUES (?, ?, ?, ?)
+            ''',
+            (seller_email, listing_id, removal_reason, remaining_bids)
+        )
+
+        cursor.execute(
+            "UPDATE Auction_Listings SET Status = 0 WHERE Listing_ID = ? AND Seller_Email = ?",
+            (listing_id, seller_email)
+        )
+
+        conn.commit()
+        flash(f"Listing #{listing_id} has been removed successfully.", "listing_success")
+    except sql.Error as e:
+        conn.rollback()
+        print(f"Remove listing error: {e}")
+        flash("A database error occurred.", "listing_error")
+    finally:
+        conn.close()
+
+    return redirect('/seller#my-listings')
+
+@app.route('/edit_listing/<int:listing_id>', methods=['GET', 'POST'])
+def edit_listing(listing_id):
+    if 'user_email' not in session or session.get('account_type') != '/seller':
+        return redirect('/')
+
+    seller_email = session['user_email']
+    conn = sql.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        '''
+        SELECT al.Listing_ID, al.Auction_Title, al.Product_Name, al.Product_Description,
+               al.Category, al.Reserve_Price, al.Quantity, al.Max_bids, al.Status,
+               COUNT(b.Bid_ID) AS bid_count
+        FROM Auction_Listings al
+        LEFT JOIN Bids b ON al.Listing_ID = b.Listing_ID AND al.Seller_Email = b.Seller_Email
+        WHERE al.Listing_ID = ? AND al.Seller_Email = ?
+        GROUP BY al.Listing_ID
+        ''',
+        (listing_id, seller_email)
+    )
+    row = cursor.fetchone()
+
+    if not row:
+        conn.close()
+        flash("Listing not found or you don't own it.", "listing_error")
+        return redirect('/seller#my-listings')
+
+    status = row[8]
+    bid_count = row[9]
+
+    if status == 2:
+        conn.close()
+        flash("Sold listings cannot be edited.", "listing_error")
+        return redirect('/seller#my-listings')
+
+    if status != 1:
+        conn.close()
+        flash("Only active listings can be edited.", "listing_error")
+        return redirect('/seller#my-listings')
+
+    if bid_count > 0:
+        conn.close()
+        flash("This listing cannot be edited because bidding has already started.", "listing_error")
+        return redirect('/seller#my-listings')
+
+    if request.method == 'GET':
+        try:
+            reserve_numeric = float(str(row[5]).replace('$', '').replace(',', '').strip())
+        except (ValueError, AttributeError):
+            reserve_numeric = 0.0
+
+        item = {
+            'listing_id': row[0],
+            'auction_title': row[1],
+            'product_name': row[2],
+            'product_description': row[3],
+            'category': row[4],
+            'reserve_price_numeric': reserve_numeric,
+            'quantity': row[6],
+            'max_bids': row[7],
+        }
+        conn.close()
+        return render_template('edit_listing.html', item=item)
+
+    auction_title = request.form.get('auction_title', '').strip()
+    product_name = request.form.get('product_name', '').strip()
+    product_description = request.form.get('product_description', '').strip()
+    category = request.form.get('category', '').strip()
+    reserve_price = request.form.get('reserve_price')
+    quantity = request.form.get('quantity')
+    max_bids = request.form.get('max_bids')
+
+    if not all([auction_title, product_name, product_description, category, reserve_price, quantity, max_bids]):
+        conn.close()
+        flash("Please fill out all required fields.", "listing_error")
+        return redirect(f'/edit_listing/{listing_id}')
+
+    try:
+        reserve_price_num = float(reserve_price)
+        quantity_int = int(quantity)
+        max_bids_int = int(max_bids)
+        if reserve_price_num < 0 or quantity_int < 1 or max_bids_int < 1:
+            conn.close()
+            flash("Numeric fields must be positive.", "listing_error")
+            return redirect(f'/edit_listing/{listing_id}')
+    except ValueError:
+        conn.close()
+        flash("Please enter valid numbers.", "listing_error")
+        return redirect(f'/edit_listing/{listing_id}')
+
+    try:
+        formatted_price = f"${reserve_price_num:,.2f}"
+        cursor.execute(
+            '''
+            UPDATE Auction_Listings
+            SET Auction_Title = ?, Product_Name = ?, Product_Description = ?,
+                Category = ?, Reserve_Price = ?, Quantity = ?, Max_bids = ?
+            WHERE Listing_ID = ? AND Seller_Email = ?
+            ''',
+            (auction_title, product_name, product_description, category,
+             formatted_price, quantity_int, max_bids_int, listing_id, seller_email)
+        )
+        conn.commit()
+        flash(f"Listing #{listing_id} updated successfully!", "listing_success")
+    except sql.Error as e:
+        conn.rollback()
+        print(f"Edit listing error: {e}")
+        flash("A database error occurred.", "listing_error")
+    finally:
+        conn.close()
+
+    return redirect('/seller#my-listings')
+
+@app.route('/auction_decide/<int:listing_id>', methods=['POST'])
+def auction_decide(listing_id):
+    if 'user_email' not in session or session.get('account_type') != '/seller':
+        return redirect('/')
+
+    seller_email = session['user_email']
+    decision = request.form.get('decision')
+
+    if decision not in ('accept', 'reject'):
+        flash("Invalid decision.", "listing_error")
+        return redirect('/seller#my-listings')
+
+    conn = sql.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            '''
+            SELECT al.Status, al.Auction_Title, al.Product_Name,
+                   (SELECT Bidder_Email FROM Bids
+                    WHERE Listing_ID = al.Listing_ID AND Seller_Email = al.Seller_Email
+                    ORDER BY Bid_Price DESC, Bid_ID DESC LIMIT 1) AS top_bidder,
+                   (SELECT MAX(Bid_Price) FROM Bids
+                    WHERE Listing_ID = al.Listing_ID AND Seller_Email = al.Seller_Email) AS top_bid
+            FROM Auction_Listings al
+            WHERE al.Listing_ID = ? AND al.Seller_Email = ?
+            ''',
+            (listing_id, seller_email)
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            flash("Listing not found.", "listing_error")
+            return redirect('/seller#my-listings')
+
+        status, auction_title, product_name, top_bidder, top_bid = row
+
+        if status != 3:
+            flash("This listing is not pending review.", "listing_error")
+            return redirect('/seller#my-listings')
+
+        title = auction_title or product_name or f"Listing #{listing_id}"
+
+        if decision == 'accept':
+            cursor.execute(
+                "UPDATE Auction_Listings SET Status = 2 WHERE Listing_ID = ? AND Seller_Email = ?",
+                (listing_id, seller_email)
+            )
+            conn.commit()
+            if top_bidder:
+                create_notification(
+                    top_bidder,
+                    f"Good news! The seller accepted your bid of ${top_bid} on '{title}'.",
+                    url_for('auction_detail', seller_email=seller_email, listing_id=listing_id)
+                )
+            flash(f"Accepted the bid for '{title}'. Listing marked as sold.", "listing_success")
+        else:
+            cursor.execute(
+                "UPDATE Auction_Listings SET Status = 0 WHERE Listing_ID = ? AND Seller_Email = ?",
+                (listing_id, seller_email)
+            )
+            conn.commit()
+            if top_bidder:
+                create_notification(
+                    top_bidder,
+                    f"The seller rejected your bid on '{title}'. The auction is now closed.",
+                    url_for('auction_detail', seller_email=seller_email, listing_id=listing_id)
+                )
+            flash(f"Rejected the bid for '{title}'. Listing marked as inactive.", "listing_success")
+    except sql.Error as e:
+        conn.rollback()
+        print(f"Auction decide error: {e}")
+        flash("A database error occurred.", "listing_error")
+    finally:
+        conn.close()
+
+    return redirect('/seller#my-listings')
 
 @app.route('/list_product', methods=['POST'])
 def list_product():
@@ -551,13 +822,64 @@ def list_product():
     def render_seller(**kwargs):
         conn = sql.connect(DB_NAME)
         cursor = conn.cursor()
-        cursor.execute("SELECT category_name FROM Categories ORDER BY category_name")
-        cats = [row[0] for row in cursor.fetchall()]
+        top_categories = get_top_categories(cursor)
+
+        cursor.execute(
+            '''
+            SELECT al.Listing_ID,
+                   al.Auction_Title,
+                   al.Product_Name,
+                   al.Category,
+                   al.Reserve_Price,
+                   al.Max_bids,
+                   al.Status,
+                   COUNT(b.Bid_ID)  AS bid_count,
+                   MAX(b.Bid_Price) AS current_bid
+            FROM Auction_Listings al
+                     LEFT JOIN Bids b ON al.Listing_ID = b.Listing_ID AND al.Seller_Email = b.Seller_Email
+            WHERE al.Seller_Email = ?
+            GROUP BY al.Listing_ID
+            ORDER BY al.Status DESC, al.Listing_ID DESC
+            ''',
+            (seller_email,),
+        )
+
+        active_listings = []
+        inactive_listings = []
+        sold_listings = []
+        pending_listings = []
+
+        for row in cursor.fetchall():
+            listing = {
+                'listing_id': row[0],
+                'auction_title': row[1],
+                'product_name': row[2],
+                'category': row[3],
+                'reserve_price': row[4],
+                'max_bids': row[5],
+                'status': row[6],
+                'bid_count': row[7],
+                'current_bid': row[8],
+            }
+            if row[6] == 1:
+                active_listings.append(listing)
+            elif row[6] == 2:
+                sold_listings.append(listing)
+            elif row[6] == 3:
+                pending_listings.append(listing)
+            else:
+                inactive_listings.append(listing)
+
         conn.close()
+
         return render_template(
             'seller_home.html',
-            categories=cats,
-            my_listings=[],
+            top_categories=top_categories,
+            active_listings=active_listings,
+            inactive_listings=inactive_listings,
+            sold_listings=sold_listings,
+            pending_listings=pending_listings,
+            my_listings=active_listings + sold_listings + inactive_listings + pending_listings,
             **kwargs,
         )
 

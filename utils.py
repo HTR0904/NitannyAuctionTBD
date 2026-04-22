@@ -83,6 +83,18 @@ def init_db():
         except sql.Error:
             pass
 
+    cursor.execute("""
+                   CREATE TABLE IF NOT EXISTS Listing_Removals
+                   (
+                       removal_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+                       seller_email   TEXT    NOT NULL,
+                       listing_id     INTEGER NOT NULL,
+                       removal_reason TEXT    NOT NULL,
+                       remaining_bids INTEGER NOT NULL,
+                       removed_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                   )
+                   """)
+
     conn.commit()
     conn.close()
 

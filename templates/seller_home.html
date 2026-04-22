@@ -168,63 +168,120 @@
         </div>
     </div>
 
-    <div class="surface-card p-4 mb-4">
+    <div class="surface-card p-4 mb-4" id="my-listings">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h3 class="text-navy font-weight-bold mb-0">Manage My Listings</h3>
-            <span class="pill">Current auction state</span>
+            <span class="pill">Grouped by status</span>
         </div>
-        <p class="text-muted">All listings you've posted, with current status and highest bid information.</p>
 
-        {% if my_listings %}
-        <div class="table-responsive">
-            <table class="table table-bordered table-hover bg-white mb-0">
-                <thead class="thead-light">
-                    <tr>
-                        <th>Listing ID</th>
-                        <th>Product</th>
-                        <th>Category</th>
-                        <th>Reserve Price</th>
-                        <th>Current Highest Bid</th>
-                        <th>Bids Progress</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in my_listings %}
-                    <tr>
-                        <td>#{{ item.listing_id }}</td>
-                        <td>
-                            <strong>{{ item.product_name }}</strong><br>
-                            <small class="text-muted">{{ item.auction_title }}</small>
-                        </td>
-                        <td>{{ item.category }}</td>
-                        <td>{{ item.reserve_price }}</td>
-                        <td>
-                            {% if item.current_bid %}
-                                ${{ "%.2f"|format(item.current_bid) }}
-                            {% else %}
-                                <span class="text-muted">No bids yet</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ item.bid_count }} / {{ item.max_bids }}</td>
-                        <td>
-                            {% if item.status == 1 %}
-                                <span class="badge badge-success">Active</span>
-                            {% elif item.status == 2 %}
-                                <span class="badge badge-secondary">Sold</span>
-                            {% else %}
-                                <span class="badge badge-dark">Inactive</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" data-toggle="tab" href="#tab-active">
+                    Active <span class="badge badge-success">{{ active_listings|length }}</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-toggle="tab" href="#tab-pending">
+                    Pending Review <span class="badge badge-warning">{{ pending_listings|length }}</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-toggle="tab" href="#tab-sold">
+                    Sold <span class="badge badge-secondary">{{ sold_listings|length }}</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-toggle="tab" href="#tab-inactive">
+                    Inactive <span class="badge badge-dark">{{ inactive_listings|length }}</span>
+                </a>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            {% for group_name, listings, empty_msg in [
+                ('active', active_listings, "No active listings. Create a new one above!"),
+                ('pending', pending_listings, "No pending auctions to review."),
+                ('sold', sold_listings, "No sold listings yet."),
+                ('inactive', inactive_listings, "No inactive listings.")
+            ] %}
+            <div class="tab-pane fade {% if group_name == 'active' %}show active{% endif %}" id="tab-{{ group_name }}">
+                {% if listings %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover bg-white mb-0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Listing ID</th>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th>Reserve Price</th>
+                                <th>Current Bid</th>
+                                <th>Bids</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in listings %}
+                            <tr>
+                                <td>#{{ item.listing_id }}</td>
+                                <td>
+                                    <a href="/auction/{{ session['user_email'] }}/{{ item.listing_id }}" class="text-navy">
+                                        <strong>{{ item.product_name }}</strong>
+                                    </a><br>
+                                    <small class="text-muted">{{ item.auction_title }}</small>
+                                </td>
+                                <td>{{ item.category }}</td>
+                                <td>{{ item.reserve_price }}</td>
+                                <td>
+                                    {% if item.current_bid %}
+                                        ${{ "%.2f"|format(item.current_bid) }}
+                                    {% else %}
+                                        <span class="text-muted">No bids</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ item.bid_count }} / {{ item.max_bids }}</td>
+                                <td>
+                                {% if group_name == 'active' %}
+                                    {% if item.bid_count == 0 %}
+                                    <a href="/edit_listing/{{ item.listing_id }}" class="btn btn-outline-primary btn-sm">Edit</a>
+                                    {% else %}
+                                    <button class="btn btn-outline-secondary btn-sm" disabled title="Cannot edit — bidding has started">Edit</button>
+                                    {% endif %}
+                                    <button type="button" class="btn btn-outline-danger btn-sm"
+                                            data-toggle="modal" data-target="#removeModal-{{ item.listing_id }}">
+                                        Remove
+                                    </button>
+                                {% elif group_name == 'pending' %}
+                                    <form action="/auction_decide/{{ item.listing_id }}" method="POST" class="d-inline">
+                                        <input type="hidden" name="decision" value="accept">
+                                        <button type="submit" class="btn btn-success btn-sm"
+                                                onclick="return confirm('Accept this bid? The listing will be marked as sold.');">
+                                            Accept
+                                        </button>
+                                    </form>
+                                    <form action="/auction_decide/{{ item.listing_id }}" method="POST" class="d-inline">
+                                        <input type="hidden" name="decision" value="reject">
+                                        <button type="submit" class="btn btn-danger btn-sm"
+                                                onclick="return confirm('Reject this bid? The listing will be marked as inactive.');">
+                                            Reject
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <span class="text-muted small">—</span>
+                                {% endif %}
+                            </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted font-italic py-3 text-center mb-0">{{ empty_msg }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
         </div>
-        {% else %}
-        <p class="text-muted font-italic mb-0">You haven't listed any products yet. Use the form above to create your first listing.</p>
-        {% endif %}
     </div>
+
 
     <div class="row">
         <div class="col-lg-6 mb-4">
@@ -242,9 +299,9 @@
             <div class="surface-card p-4 h-100">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h3 class="text-navy font-weight-bold mb-0">Auction Results</h3>
-                    <span class="pill">Reference view</span>
+                    <span class="pill">Sold & Pending</span>
                 </div>
-                <p class="text-muted">This section reflects the project layout: reserve-met auctions can proceed automatically, while below-reserve examples show seller review actions.</p>
+                <p class="text-muted">Reserve-met auctions are marked as sold automatically. Below-reserve auctions need your review.</p>
                 <table class="table table-bordered table-hover bg-white mb-0">
                     <thead class="thead-light">
                         <tr>
@@ -255,27 +312,105 @@
                         </tr>
                     </thead>
                     <tbody>
+                        {% for item in sold_listings %}
                         <tr>
-                            <td>Monitor</td>
-                            <td>$180.00</td>
+                            <td>
+                                <strong>{{ item.product_name }}</strong><br>
+                                <small class="text-muted">#{{ item.listing_id }}</small>
+                            </td>
+                            <td>
+                                {% if item.current_bid %}
+                                    ${{ "%.2f"|format(item.current_bid) }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
                             <td><span class="text-success font-weight-bold">Reserve Met</span></td>
                             <td><span class="text-success">Payment Automatically Processed</span></td>
                         </tr>
+                        {% endfor %}
+
+                        {% for item in pending_listings %}
                         <tr>
-                            <td>Jacket</td>
-                            <td>$25.00</td>
+                            <td>
+                                <strong>{{ item.product_name }}</strong><br>
+                                <small class="text-muted">#{{ item.listing_id }}</small>
+                            </td>
+                            <td>
+                                {% if item.current_bid %}
+                                    ${{ "%.2f"|format(item.current_bid) }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
                             <td><span class="text-warning font-weight-bold">Below Reserve</span></td>
                             <td>
-                                <button class="btn btn-success btn-sm" type="button" disabled>Accept</button>
-                                <button class="btn btn-danger btn-sm" type="button" disabled>Reject</button>
+                                <form action="/auction_decide/{{ item.listing_id }}" method="POST" class="d-inline">
+                                    <input type="hidden" name="decision" value="accept">
+                                    <button class="btn btn-success btn-sm" type="submit"
+                                            onclick="return confirm('Accept this bid? The listing will be marked as sold.');">
+                                        Accept
+                                    </button>
+                                </form>
+                                <form action="/auction_decide/{{ item.listing_id }}" method="POST" class="d-inline">
+                                    <input type="hidden" name="decision" value="reject">
+                                    <button class="btn btn-danger btn-sm" type="submit"
+                                            onclick="return confirm('Reject this bid? The listing will be marked as inactive.');">
+                                        Reject
+                                    </button>
+                                </form>
                             </td>
                         </tr>
+                        {% endfor %}
+
+                        {% if not sold_listings and not pending_listings %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted font-italic py-3">
+                                No completed auctions yet. Results will appear here when auctions end.
+                            </td>
+                        </tr>
+                        {% endif %}
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
 </div>
+
+{% for item in active_listings %}
+<div class="modal fade" id="removeModal-{{ item.listing_id }}" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form action="/remove_listing/{{ item.listing_id }}" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title">Remove "{{ item.product_name }}"?</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">
+                        This will remove the listing from the marketplace.
+                        Remaining bids capacity: <strong>{{ item.max_bids - item.bid_count }}</strong>.
+                    </p>
+                    <div class="form-group">
+                        <label><strong>Reason for Removal <span class="text-danger">*</span></strong></label>
+                        <textarea name="removal_reason" class="form-control" rows="3" required
+                                  placeholder="e.g. Changed my mind, item already sold elsewhere, etc."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Confirm Removal</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+
+
 <script src="https://code.jquery.com/jquery-3.4.1.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"
         integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo"
@@ -298,7 +433,7 @@ $(document).ready(function() {
             $.getJSON('/get_subcategories', { parent: selectedValue }, function(data) {
 
                 if (data.subcategories && data.subcategories.length > 0) {
-                    // Create a new dropdown with a bottom margin
+
                     var $newSelect = $('<select class="form-control dynamic-category mb-2" required></select>');
                     $newSelect.append('<option value="" selected disabled>Select Subcategory...</option>');
 
@@ -306,11 +441,8 @@ $(document).ready(function() {
                         $newSelect.append('<option value="' + child + '">' + child + '</option>');
                     });
 
-                    // Insert it directly AFTER the dropdown we just changed!
                     $currentSelect.after($newSelect);
 
-                    // Clear the hidden input since they aren't at a leaf node yet
-                    // (Forces the user to select the final subcategory before submitting)
                     $('#final_category_input').val('');
                 }
             });
