@@ -1,0 +1,193 @@
+:root {
+    --na-navy: #041e42;
+    --na-blue: #153d72;
+    --na-ink: #16243a;
+    --na-muted: #62718a;
+    --na-line: rgba(4, 30, 66, 0.12);
+    --na-glass: rgba(255, 255, 255, 0.82);
+    --na-glass-strong: rgba(255, 255, 255, 0.94);
+    --na-gold: #f2c55c;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    color: var(--na-ink);
+    background:
+        radial-gradient(circle at top left, rgba(242, 197, 92, 0.18), transparent 32rem),
+        radial-gradient(circle at top right, rgba(21, 61, 114, 0.16), transparent 28rem),
+        linear-gradient(180deg, #f6f8fc 0%, #eef3fb 48%, #ffffff 100%) !important;
+    min-height: 100vh;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+        linear-gradient(rgba(4, 30, 66, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(4, 30, 66, 0.035) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.42), transparent 70%);
+    z-index: -1;
+}
+
+.container {
+    position: relative;
+}
+
+.navbar.bg-navy,
+.bg-navy {
+    background:
+        linear-gradient(135deg, rgba(4, 30, 66, 0.98), rgba(21, 61, 114, 0.95)) !important;
+    box-shadow: 0 14px 36px rgba(4, 30, 66, 0.16);
+}
+
+.navbar {
+    backdrop-filter: blur(14px);
+}
+
+.navbar-brand,
+.navbar .nav-link {
+    letter-spacing: 0.01em;
+}
+
+.card,
+.box,
+.seller-block,
+.surface-card,
+.work-card,
+.metric-card,
+.register-card,
+.portal-card,
+.notification-card,
+.listing-card,
+.filter-card {
+    background: var(--na-glass) !important;
+    border: 1px solid rgba(255, 255, 255, 0.7) !important;
+    border-radius: 22px !important;
+    box-shadow: 0 18px 45px rgba(4, 30, 66, 0.10) !important;
+    backdrop-filter: blur(18px);
+}
+
+.jumbotron,
+.hero-shell,
+.hero-panel {
+    box-shadow: 0 22px 55px rgba(4, 30, 66, 0.14) !important;
+}
+
+.table {
+    color: var(--na-ink);
+}
+
+.table thead th,
+.thead-light th {
+    background: rgba(238, 243, 251, 0.92) !important;
+    border-color: var(--na-line) !important;
+    color: var(--na-navy);
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.table td,
+.table th {
+    border-color: rgba(4, 30, 66, 0.08) !important;
+    vertical-align: middle;
+}
+
+.form-control,
+.custom-select,
+select.form-control {
+    min-height: 46px;
+    border-radius: 12px;
+    border: 1px solid rgba(4, 30, 66, 0.18);
+    background-color: rgba(255, 255, 255, 0.94);
+    color: var(--na-ink);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+textarea.form-control {
+    min-height: 118px;
+    line-height: 1.45;
+    resize: vertical;
+}
+
+.form-control:focus,
+.custom-select:focus {
+    border-color: rgba(21, 61, 114, 0.58);
+    box-shadow: 0 0 0 0.18rem rgba(21, 61, 114, 0.16);
+}
+
+label {
+    color: var(--na-ink);
+    font-weight: 600;
+}
+
+.btn {
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.btn-navy,
+.btn-dark {
+    background: linear-gradient(135deg, var(--na-navy), var(--na-blue)) !important;
+    border-color: transparent !important;
+    color: #ffffff !important;
+    box-shadow: 0 10px 24px rgba(4, 30, 66, 0.18);
+}
+
+.btn-navy:hover,
+.btn-dark:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 14px 30px rgba(4, 30, 66, 0.23);
+}
+
+.btn-outline-dark,
+.btn-outline-secondary,
+.btn-outline-light {
+    border-width: 1.5px;
+}
+
+.alert {
+    border: 0;
+    border-radius: 16px;
+    box-shadow: 0 12px 26px rgba(4, 30, 66, 0.08);
+}
+
+.badge,
+.pill {
+    letter-spacing: 0.01em;
+}
+
+.dropdown-menu {
+    border: 1px solid rgba(4, 30, 66, 0.10);
+    border-radius: 16px;
+    box-shadow: 0 18px 40px rgba(4, 30, 66, 0.16);
+}
+
+a {
+    color: var(--na-blue);
+}
+
+a:hover {
+    color: var(--na-navy);
+}
+
+@media (max-width: 768px) {
+    .display-4 {
+        font-size: 2.25rem;
+    }
+
+    .container {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .form-inline .form-control {
+        width: 100% !important;
+    }
+}
