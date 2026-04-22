@@ -68,10 +68,10 @@ Category management inserts new categories into the real `Categories` table.
 Helpdesk staff can choose a parent category and add a child category underneath it.
 
 Tickets are stored in the real `Requests` table.
-New tickets are assigned to the default unassigned queue email `helpdesk@lsu.edu`.
+New tickets are assigned to the default unassigned queue email `helpdeskteam@lsu.edu`.
 The helpdesk dashboard displays:
 - Tickets assigned to the currently logged-in helpdesk staff member
-- Unassigned tickets assigned to `helpdesk@lsu.edu`
+- Unassigned tickets assigned to `helpdeskteam@lsu.edu`
 
 Helpdesk staff can assign unassigned tickets to themselves from the dashboard.
 They can also update ticket status and export the pseudo database view as CSV or XLSX.
@@ -79,16 +79,40 @@ They can also update ticket status and export the pseudo database view as CSV or
 The helpdesk routes are split into `routes/helpdesk.py` so that new helpdesk logic does not keep growing `app.py`.
 Shared helper functions for account creation, ticket queries, category inserts, and exports are located in `utils.py`.
 
-### Watchlist
+### Category Hierarchy and Dynamic Drill-down
 
-The watchlist feature allows bidders to track auction listings.
-Users can watch or unwatch listings, view all watched listings from the watchlist page,
-and open the auction listing page directly from the watchlist.
+The platform implements a nested category hierarchy to organize listings. The application uses an AJAX drill-down system to render options dynamically, rather than loading all categories simultaneously. 
+
+When a category is selected from a dropdown menu, a jQuery listener triggers a `change` event and sends a `GET` request to `/get_subcategories`. 
+
+The Flask route queries the `Categories` table for the direct children of the selected category and returns the results as a JSON array. The frontend JavaScript parses this data and appends a new `<select>` dropdown to the interface. The most specific selected value is stored in a hidden `#final_category_input` field for form submission.
+
+This structure is used for the following feature:
+
+#### Helpdesk (Category Management)
+Staff use the cascading dropdown menus to navigate the existing tree and select a parent node. 
+They can then input a new category name, which is inserted into the database as a child of the selected node. 
+The UI also provides a visual map of the category tree that fetches subcategories via AJAX when a node is expanded.
+#### Seller (Listing Creation):
+The "List a Product" form prompts sellers to select a top-level category and proceed through generated subcategories to 
+specify the product classification before submission.
+
+#### Search Filtering:
+The dynamic dropdowns enable users to filter search results by specific subcategories. 
+The backend utilizes a BFS function (`get_category_descendants`) to identify the selected category and map its nested descendants.
+These descendants are appended to an SQL `IN` clause to ensure queries for a parent category return items from all corresponding subcategories. 
+`get_category_breadcrumbs` traverses the database hierarchy upward to generate a visual of the filter path.
 
 ### Notifications
 
 The notification feature alerts users about auction and bidding events.
 Notifications are connected to the database and can be viewed from the notifications page.
+
+### Watchlist
+
+The watchlist feature allows bidders to track auction listings.
+Users can watch or unwatch listings, view all watched listings from the watchlist page,
+and open the auction listing page directly from the watchlist.
 
 ### Settings
 
