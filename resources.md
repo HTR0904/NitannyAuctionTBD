@@ -26,7 +26,7 @@ SQLite3 was used for the relational database management system. Queries were use
 Used `LEFT JOIN` and `INNER JOIN` to fetch data across tables within single queries: https://www.sqlite.org/lang_select.html#joins
 
 ## JavaScript / AJAX / Additional Page Logic
-jQuery and Flask were used to implement the category drill-down feature.
+jQuery and Flask were used to implement the category dropdown feature.
 
 ### AJAX
 Used for HTTP GET requests to load subcategories: https://api.jquery.com/jQuery.getJSON/

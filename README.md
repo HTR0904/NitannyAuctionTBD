@@ -91,9 +91,9 @@ They can also update ticket status and export the pseudo database view as CSV or
 The helpdesk routes are split into `routes/helpdesk.py` so that new helpdesk logic does not keep growing `app.py`.
 Shared helper functions for account creation, ticket queries, category inserts, and exports are located in `utils.py`.
 
-### Category Hierarchy and Dynamic Drill-down
+### Category Hierarchy and Dynamic Dropdown
 
-The platform implements a nested category hierarchy to organize listings. The application uses an AJAX drill-down system to render options dynamically, rather than loading all categories simultaneously. 
+The platform implements a nested category hierarchy to organize listings. The application uses AJAX to render options dynamically, rather than loading all categories simultaneously. 
 
 When a category is selected from a dropdown menu, a jQuery listener triggers a `change` event and sends a `GET` request to `/get_subcategories`. 
 
