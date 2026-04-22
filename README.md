@@ -122,28 +122,38 @@ Sellers can update bank payment information from this page.
 ## Organization
 ```text
 Project_Root/
-|-- app.py                    # Main Python/Flask application
-|-- README.md                 # Project documentation
-|-- resources.md              # Documentation of resources used for project
-|-- setup.md                  # Project setup instructions and guidelines
-|-- utils.py                  # Shared database helper functions
-|-- routes/                   # Route blueprints split out from app.py
-|   |-- auth.py               # Login, logout, and registration routes
-|   |-- helpdesk.py           # Helpdesk, ticket, category, account, and export routes
-|   `-- notif.py              # Notification routes
-|-- templates/                # HTML frontend files
-|   |-- login.html            # Main login page
-|   |-- seller_home.html      # Main homepage for sellers
-|   |-- helpdesk_home.html    # Main homepage for helpdesk
-|   |-- bidders_home.html     # Main homepage for bidders
-|   |-- search.html           # Search page
-|   |-- watchlist.html        # Watchlist page
-|   |-- notifications.html    # Notifications page
-|   `-- settings.html         # Account settings page
-`-- static/                   # Static assets
-    |-- css/                  # Shared UI polish stylesheet
-    `-- images/               # Image files
-        `-- docs/             # Images used for README pages
+├── app.py                    # Main Python/Flask application
+├── dataset_tables.db         # SQLite database file
+├── README.md                 # Project documentation
+├── resources.md              # Documentation of resources used for project
+├── setup.md                  # Project setup instructions and guidelines
+├── utils.py                  # Shared database helper functions
+├── routes/                   # Route blueprints split out from app.py
+│   ├── __init__.py           # Python package initializer
+│   ├── auth.py               # Login, logout, and registration routes
+│   ├── helpdesk.py           # Helpdesk, ticket, and administrative routes
+│   └── notif.py              # Notification and alert routes
+├── static/                   # Static assets
+│   └── css/                  # Stylesheet directory
+│       └── ui-polish.css     # Shared UI polish stylesheet
+└── templates/                # HTML frontend files
+    ├── components/           # Reusable HTML template fragments
+    │   ├── navbar.html       # Global navigation bar component (for bidder and seller)
+    │   └── watch_button.html # Reusable button for watchlist toggling
+    ├── auction_detail.html   # Detailed view of individual listings
+    ├── bidders_home.html     # Main dashboard for bidders
+    ├── bidding_history.html  # Record of user bidding activity
+    ├── checkout.html         # Payment and transaction processing page
+    ├── contact.html          # Support and category request submission page
+    ├── edit_listing.html     # Seller interface for modifying active listings
+    ├── helpdesk_home.html    # Main dashboard for helpdesk staff
+    ├── login.html            # User authentication portal
+    ├── notifications.html    # User notification history
+    ├── register.html         # New account registration page
+    ├── search.html           # Search and filtering page
+    ├── seller_home.html      # Main dashboard for sellers
+    ├── settings.html         # Account and payment management page
+    └── watchlist.html        # Tracked auction listings page
 ```
 
 ---
