@@ -157,10 +157,8 @@ def auction_sql(extra_where="", ending=""):
         {ending}
     """
 
-
-
-def load_my_bids(cur, me):
-    cur.execute("""
+def load_my_bids(cur, me, limit=None):
+    cur.execute(f"""
         SELECT
             a.Listing_ID AS listing_id,
             a.Seller_Email AS seller_email,
@@ -169,6 +167,7 @@ def load_my_bids(cur, me):
             a.Category AS category,
             a.Status AS status_code,
             MAX(CASE WHEN b.Bidder_Email = ? THEN b.Bid_Price END) AS my_bid,
+            MAX(CASE WHEN b.Bidder_Email = ? THEN b.Bid_ID END) AS my_latest_bid_id,
             MAX(b.Bid_Price) AS high_bid,
             COUNT(b.Bid_ID) AS bid_count,
             (
@@ -186,7 +185,15 @@ def load_my_bids(cur, me):
                   AND t.Listing_ID = a.Listing_ID
                   AND t.Bidder_Email = ?
                 LIMIT 1
-            ) AS won_transaction
+            ) AS won_transaction,
+            (
+                SELECT r.Rating
+                FROM Ratings r
+                WHERE r.Bidder_Email = ?
+                  AND r.Seller_Email = a.Seller_Email
+                  AND r.Listing_ID = a.Listing_ID
+                LIMIT 1
+            ) AS rating
         FROM Auction_Listings a
         JOIN Bids b
             ON b.Seller_Email = a.Seller_Email
@@ -205,8 +212,9 @@ def load_my_bids(cur, me):
             a.Product_Name,
             a.Category,
             a.Status
-        ORDER BY a.Status = 1 DESC, a.Listing_ID DESC
-    """, (me, me, me))
+        ORDER BY my_latest_bid_id DESC, a.Listing_ID DESC
+        {limit_clause(limit)}
+    """, (me, me, me, me, me))
 
     rows = []
 
@@ -220,6 +228,8 @@ def load_my_bids(cur, me):
             item['standing'] = 'Winning'
         elif item['status_code'] == 1:
             item['standing'] = 'Outbid'
+        elif item['status_code'] == 2 and item['leader'] == me:
+            item['standing'] = 'Awaiting Payment'
         elif item['leader'] == me:
             item['standing'] = 'Highest When Closed'
         else:
@@ -229,6 +239,80 @@ def load_my_bids(cur, me):
 
     return rows
 
+def load_awaiting_payment_items(cur, me, limit=None):
+    cur.execute(f"""
+        SELECT
+            a.Listing_ID AS listing_id,
+            a.Seller_Email AS seller_email,
+            COALESCE(NULLIF(a.Auction_Title, ''), a.Product_Name) AS title,
+            a.Product_Name AS product_name,
+            a.Category AS category,
+            MAX(b.Bid_Price) AS amount_due,
+            COUNT(b.Bid_ID) AS bid_count,
+            MAX(b.Bid_ID) AS latest_bid_id
+        FROM Auction_Listings a
+        JOIN Bids b
+            ON b.Seller_Email = a.Seller_Email
+           AND b.Listing_ID = a.Listing_ID
+        WHERE a.Status = 2
+          AND NOT EXISTS (
+              SELECT 1
+              FROM Transactions t
+              WHERE t.Seller_Email = a.Seller_Email
+                AND t.Listing_ID = a.Listing_ID
+                AND t.Bidder_Email = ?
+          )
+          AND (
+              SELECT b2.Bidder_Email
+              FROM Bids b2
+              WHERE b2.Seller_Email = a.Seller_Email
+                AND b2.Listing_ID = a.Listing_ID
+              ORDER BY b2.Bid_Price DESC, b2.Bid_ID DESC
+              LIMIT 1
+          ) = ?
+        GROUP BY
+            a.Seller_Email,
+            a.Listing_ID,
+            a.Auction_Title,
+            a.Product_Name,
+            a.Category
+        ORDER BY latest_bid_id DESC, a.Listing_ID DESC
+        {limit_clause(limit)}
+    """, (me, me))
+
+    return cur.fetchall()
+
+def load_completed_items(cur, me, limit=None):
+    cur.execute(f"""
+        SELECT
+            t.Transaction_ID AS transaction_id,
+            t.Seller_Email AS seller_email,
+            t.Listing_ID AS listing_id,
+            t.Date AS sold_date,
+            t.Payment AS payment,
+            COALESCE(NULLIF(a.Auction_Title, ''), a.Product_Name) AS title,
+            a.Product_Name AS product_name,
+            r.Rating AS rating,
+            r.Rating_Desc AS rating_desc
+        FROM Transactions t
+        JOIN Auction_Listings a
+            ON a.Seller_Email = t.Seller_Email
+           AND a.Listing_ID = t.Listing_ID
+        LEFT JOIN Ratings r
+            ON r.Bidder_Email = t.Bidder_Email
+           AND r.Seller_Email = t.Seller_Email
+           AND r.Listing_ID = t.Listing_ID
+        WHERE t.Bidder_Email = ?
+        ORDER BY t.Transaction_ID DESC
+        {limit_clause(limit)}
+    """, (me,))
+
+    return cur.fetchall()
+
+def limit_clause(limit):
+    if limit is None:
+        return ""
+    return f"LIMIT {max(1, int(limit))}"
 
 def load_ratings(cur, me):
     cur.execute("""

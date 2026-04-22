@@ -63,6 +63,7 @@
                     <p class="small-muted mb-1">Minimum next bid: ${{ item.min_bid }}</p>
                     <p class="small-muted mb-1">Total bids: {{ item.bid_count }} / {{ item.max_bids }}</p>
 
+                    {# Added Bids Remaining Display #}
                     {% if item.status_code == 1 %}
                         <p class="text-info font-weight-bold">Bids remaining: {{ item.max_bids - item.bid_count }}</p>
                     {% endif %}
@@ -74,6 +75,7 @@
                     <hr>
 
                     {% if item.status_code == 1 %}
+                        {# STATUS 1: AUCTION IS ACTIVE #}
                         {% if card_count == 0 %}
                             <div class="alert alert-warning">
                                 You need a saved credit card before placing a bid.
@@ -117,10 +119,12 @@
                         </form>
 
                     {% elif item.status_code == 2 %}
+                        {# STATUS 2: AUCTION MAX BIDS REACHED & SOLD #}
                         <div class="alert alert-success font-weight-bold text-center">
                             Auction Ended: Item Sold
                         </div>
 
+                        {# Check if the current user is the highest bidder #}
                         {% if my_bid == item.current_bid and my_bid > 0 %}
                             <div class="alert alert-info text-center">
                                 <strong>Congratulations!</strong> You won this auction.
@@ -144,6 +148,7 @@
                         {% endif %}
 
                     {% elif item.status_code == 0 %}
+                        {# STATUS 0: AUCTION CLOSED / RESERVE NOT MET #}
                         <div class="alert alert-secondary font-weight-bold text-center">
                             Auction Closed
                         </div>

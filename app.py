@@ -87,28 +87,28 @@ def change_password():
 
     return redirect('/settings')
 
-
+# Min Goo: discord me if have any questions or need clarification
+# Bidder Home page, loads the main dashboard data for bidder_home page, shows trending auctions, recent bids, unpaid bids, completed bids
 @app.route('/bidder')
 def bidder():
     if not bidder_only():
         return redirect('/')
-
     me = session['user_email']
-    db = db_connect()
-    cur = db.cursor()
-
+    db= db_connect()
+    cur =db.cursor()
+    # checks if the bidder has his credit card saved, if not then shows warning
     cur.execute("""
-                SELECT COUNT(*) AS total
-                FROM Credit_Cards
-                WHERE Owner_email = ?
+                select count(*) as total 
+                from Credit_Cards
+                where Owner_email = ?
                 """, (me,))
     card_count = cur.fetchone()['total']
-
     cur.execute(auction_sql(ending="LIMIT 3"), (me,))
-    trending = cur.fetchall()
-
-    my_bids = load_my_bids(cur, me)
-    ratings = load_ratings(cur, me)
+    trending = cur.fetchall() # for trending items, refer to the auction_sql() from utils.py for more details, but the whole idea is to check if one is active, bidder is not the seller, it has more bid counts than others, if they have the same counts, then higher bid money takes priority
+    # small overview of items, rests are in bidding history page, these are just top 3 most recent ones
+    my_bids =load_my_bids(cur, me, limit=3)
+    awaiting_payment_items= load_awaiting_payment_items(cur, me, limit=3)
+    completed_items= load_completed_items(cur, me, limit=3)
 
     db.close()
 
@@ -121,8 +121,38 @@ def bidder():
         card_count=card_count,
         trending_listings=trending,
         my_bids=my_bids,
-        completed_transactions=ratings)
+        awaiting_payment_items=awaiting_payment_items,
+        completed_items=completed_items,
+        completed_transactions=completed_items,
+        current_user=get_app_user(session['user_email']))
 
+
+@app.route('/bidding_history')
+def bidding_history():
+    if not bidder_only():
+        return redirect('/')
+
+    me = session['user_email']
+    db =db_connect()
+    cur = db.cursor()
+
+    all_bids = load_my_bids(cur, me)
+    # 1 = in progress of bidding
+    active_bids = [item for item in all_bids if item['status_code']== 1]
+    # 2 = closed/sold, 0 = closed/inactive (reserve price did not match with the last bidding price)
+    closed_bids = [item for item in all_bids if item['status_code'] !=1]
+
+    db.close()
+
+    return render_template(
+        'bidding_history.html',
+        user_email=me,
+        active_bids=active_bids,
+        closed_bids=closed_bids,
+        message=session.pop('bidder_msg', None))
+
+# this is for directing bidders to the auction detail page - when user clicks the item, it directs you to the separate page of the item
+# also for bid history, watchlist, payment status, and seller rating options
 @app.route('/auction/<seller_email>/<int:listing_id>')
 def auction_detail(seller_email, listing_id):
     if not bidder_only():
@@ -132,60 +162,51 @@ def auction_detail(seller_email, listing_id):
     db = db_connect()
     cur = db.cursor()
 
-    # Check if user has any saved cards
+    # Check if the bidder has any saved cards
     cur.execute("""
-        SELECT COUNT(*) AS total
-        FROM Credit_Cards
-        WHERE Owner_email = ?
+        select count(*) as total 
+        from Credit_Cards
+        where Owner_email = ?
     """, (me,))
     card_count = cur.fetchone()['total']
 
-    # Fetch Auction Details with Seller/Vendor Name support
+    # this gets all the auction infos, calculates current bid- total and min bid for next bid, and seller rating
     cur.execute("""
-        SELECT
-            a.Listing_ID AS listing_id,
-            a.Seller_Email AS seller_email,
-            COALESCE(NULLIF(a.Auction_Title, ''), a.Product_Name) AS title,
-            a.Product_Name AS product_name,
-            a.Product_Description AS description,
-            a.Category AS category,
-            a.Max_bids AS max_bids,
-            a.Reserve_Price AS reserve_price,
-            a.Status AS status_code,
-            -- Logic to determine Seller Name vs Business Name 
-            COALESCE(lv.Business_Name, bdr.first_name || ' ' || bdr.last_name) AS seller_name,
-            (
-                SELECT COALESCE(MAX(b.Bid_Price), 0)
-                FROM Bids b
-                WHERE b.Seller_Email = a.Seller_Email
-                  AND b.Listing_ID = a.Listing_ID
-            ) AS current_bid,
-            (
-                SELECT COUNT(*)
-                FROM Bids b
-                WHERE b.Seller_Email = a.Seller_Email
-                  AND b.Listing_ID = a.Listing_ID
-            ) AS bid_count,
-            (
-                SELECT COALESCE(MAX(b.Bid_Price), 0) + 1
-                FROM Bids b
-                WHERE b.Seller_Email = a.Seller_Email
-                  AND b.Listing_ID = a.Listing_ID
-            ) AS min_bid,
-            (
-                SELECT ROUND(AVG(r.Rating), 1)
-                FROM Ratings r
-                WHERE r.Seller_Email = a.Seller_Email
-            ) AS seller_rating,
-            (
-                SELECT COUNT(*)
-                FROM Ratings r
-                WHERE r.Seller_Email = a.Seller_Email
-            ) AS rating_count
-        FROM Auction_Listings a
-        LEFT JOIN Local_Vendors lv ON a.Seller_Email = lv.Email 
-        LEFT JOIN Bidders bdr ON a.Seller_Email = bdr.email 
-        WHERE a.Listing_ID = ? AND a.Seller_Email = ? 
+        select
+            a.Listing_ID as listing_id,
+            a.Seller_Email as seller_email,
+            COALESCE(NULLIF(a.Auction_Title, ''), a.Product_Name) as title,
+            a.Product_Name as product_name,
+            a.Product_Description as description,
+            a.Category as category,
+            a.Max_bids as max_bids,
+            a.Reserve_Price as reserve_price,
+            a.Status as status_code,
+            (   select COALESCE(max(b.Bid_Price), 0)
+                from Bids b
+                where b.Seller_Email = a.Seller_Email
+                  and b.Listing_ID = a.Listing_ID
+            ) as current_bid,
+            (   select count(*)
+                from Bids b
+                where b.Seller_Email = a.Seller_Email
+                  and b.Listing_ID = a.Listing_ID
+            ) as bid_count,
+            (   select COALESCE(MAX(b.Bid_Price), 0) + 1
+                from Bids b
+                where b.Seller_Email = a.Seller_Email
+                  and b.Listing_ID = a.Listing_ID
+            ) as min_bid,
+            (   select ROUND(avg(r.Rating), 1)
+                from Ratings r
+                where r.Seller_Email = a.Seller_Email
+            ) as seller_rating,
+            (   select COUNT(*)
+                from Ratings r
+                where r.Seller_Email = a.Seller_Email
+            ) as rating_count
+        from Auction_Listings a
+        where a.Listing_ID = ? and a.Seller_Email = ?
     """, (listing_id, seller_email))
     item = cur.fetchone()
 
@@ -194,47 +215,55 @@ def auction_detail(seller_email, listing_id):
         bidder_msg('danger', 'Auction not found.')
         return redirect(url_for('bidder'))
 
-    # Fetch Bid History
+    # shows most recent and highest bid made for the bidder
     cur.execute("""
-        SELECT Bidder_Email AS bidder_email, Bid_Price AS bid_price
-        FROM Bids
-        WHERE Seller_Email = ?
-          AND Listing_ID = ?
-        ORDER BY Bid_Price DESC, Bid_ID ASC
+        select Bidder_Email as bidder_email, Bid_Price as bid_price
+        from Bids
+        where Seller_Email = ?
+          and Listing_ID = ?
+        Order BY Bid_Price DESC, Bid_ID ASC
         LIMIT 10
     """, (seller_email, listing_id))
     bid_history = cur.fetchall()
-
-    # Fetch the current user's highest bid for this item
     cur.execute("""
-        SELECT MAX(Bid_Price) AS my_bid
-        FROM Bids
-        WHERE Seller_Email = ?
-          AND Listing_ID = ?
-          AND Bidder_Email = ?
+        Select Max(Bid_Price) as my_bid
+        from Bids
+        where Seller_Email = ?
+          and Listing_ID = ?
+          and Bidder_Email = ?
     """, (seller_email, listing_id, me))
     my_bid = cur.fetchone()['my_bid']
 
-    # Check Watchlist status
+    # Check if the bidder have already added the item before to watchlist
     cur.execute("""
-        SELECT 1
-        FROM Watchlist
-        WHERE Bidder_Email = ?
-          AND Listing_ID = ?
-          AND Seller_Email = ?
+        select 1
+        from Watchlist
+        where Bidder_Email = ?
+          and Listing_ID = ?
+          and Seller_Email = ?
     """, (me, listing_id, seller_email))
     is_watching = bool(cur.fetchone())
 
-    # Check if a transaction exists
+    # Check if bidder already made the transaction
     cur.execute("""
-        SELECT 1
-        FROM Transactions
-        WHERE Listing_ID = ? 
-          AND Seller_Email = ? 
-          AND Bidder_Email = ?
+        select 1
+        from Transactions
+        where Listing_ID = ? 
+          and Seller_Email = ? 
+          and Bidder_Email = ?
     """, (listing_id, seller_email, me))
     has_paid = bool(cur.fetchone())
 
+    # checks if bidder already rated the seller
+    cur.execute("""
+        select 1
+        from Ratings
+        where Bidder_Email = ?
+          and Seller_Email = ?
+          and Listing_ID = ?
+        LIMIT 1
+    """, (me, seller_email, listing_id))
+    has_rated = bool(cur.fetchone())
     db.close()
 
     return render_template(
@@ -246,9 +275,11 @@ def auction_detail(seller_email, listing_id):
         card_count=card_count,
         is_watching=is_watching,
         has_paid=has_paid,
+        has_rated=has_rated,
         message=session.pop('bidder_msg', None)
     )
 
+# handles bidding actions like bid price validation, inserts new bid, closes bid if maximum count of bid is made
 @app.route('/place_bid', methods=['POST'])
 def place_bid():
     if not bidder_only():
@@ -258,6 +289,7 @@ def place_bid():
     listing_id = request.form.get('listing_id', type=int)
     seller_email_input = request.form.get('seller_email')
 
+    # enforces the new bidding to be integer value (at least one dollar)
     try:
         price = int(request.form.get('bid_price', ''))
     except ValueError:
@@ -267,21 +299,19 @@ def place_bid():
     db = db_connect()
     cur = db.cursor()
 
+    # if auction title is empty, use product name as auction title
     try:
         cur.execute("""
-                    SELECT Seller_Email,
-                           Status,
-                           Max_bids,
-                           Reserve_Price,
-                           COALESCE(NULLIF(Auction_Title, ''), Product_Name) as title
-                    FROM Auction_Listings
-                    WHERE Listing_ID = ?
-                      AND Seller_Email = ?
+                    select Seller_Email, Status, Max_bids,Reserve_Price, COALESCE(NULLIF(Auction_Title, ''), Product_Name) as title
+                    from Auction_Listings
+                    where Listing_ID = ?
+                      and Seller_Email = ?
                     """, (listing_id, seller_email_input))
         item = cur.fetchone()
 
+        # handles the case for auction not being active
         if not item or item['Status'] != 1:
-            bidder_msg('danger', 'Auction not active.')
+            bidder_msg('danger', 'Auction not active')
             return redirect(url_for('bidder'))
 
         seller = item['Seller_Email']
@@ -289,67 +319,69 @@ def place_bid():
         title = item['title']
         detail_url = url_for('auction_detail', seller_email=seller, listing_id=listing_id)
 
-        # Check for Previous High Bidder
+        # Check for last high bidder
         cur.execute("""
-                    SELECT Bidder_Email
-                    FROM Bids
-                    WHERE Listing_ID = ?
-                      AND Seller_Email = ?
-                    ORDER BY Bid_Price DESC, Bid_ID DESC
+                    select Bidder_Email
+                    from Bids
+                    where Listing_ID = ?
+                      and Seller_Email = ?
+                    order by Bid_Price DESC, Bid_ID DESC
                     LIMIT 1
                     """, (listing_id, seller))
         prev_row = cur.fetchone()
         prev_high_bidder = prev_row['Bidder_Email'] if prev_row else None
 
-        # CONSECUTIVE BID CHECK
+        # no same bidder can bid on the same item consecutively
         if prev_high_bidder == me:
             bidder_msg('danger', 'You are already the highest bidder. You must wait for another bidder before bidding again.')
             return redirect(detail_url)
 
-        # Enforce the $1 increment rule
+        # enforces the new bid to be higher than the last one.
         cur.execute("""
-                    SELECT COALESCE(MAX(Bid_Price), 0) + 1 AS needed
-                    FROM Bids
-                    WHERE Seller_Email = ?
-                      AND Listing_ID = ?
+                    select COALESCE(MAX(Bid_Price), 0) + 1 as needed
+                    from Bids
+                    where Seller_Email = ?
+                      and Listing_ID = ?
                     """, (seller, listing_id))
         needed = cur.fetchone()['needed']
 
         if price < needed:
-            bidder_msg('danger', f'Your bid must be at least ${needed}.')
+            bidder_msg('danger', f'Your bid must be more than ${needed}.')
             return redirect(detail_url)
 
+        # if above constraints passes, then passes new bid
         cur.execute("""
-                    INSERT INTO Bids (Seller_Email, Listing_ID, Bidder_Email, Bid_Price)
-                    VALUES (?, ?, ?, ?)
+                    insert into Bids (Seller_Email, Listing_ID, Bidder_Email, Bid_Price)
+                    values (?, ?, ?, ?)
                     """, (seller, listing_id, me, price))
 
         auction_ended = False
         reserve_met = False
 
-        cur.execute("SELECT COUNT(*) as cnt FROM Bids WHERE Listing_ID=? AND Seller_Email=?", (listing_id, seller))
+        # handles the case of allowed bid counts
+        cur.execute("select count(*) as cnt FROM Bids where Listing_ID=? and Seller_Email=?", (listing_id, seller))
         if cur.fetchone()['cnt'] >= max_allowed:
             auction_ended = True
 
             try:
-                # Handle cases where reserve might be stored as a string with symbols
+                # Handle cases where reserve might be stored as a string with symbols like $3,000 to 3000
                 res_clean = str(item['Reserve_Price']).replace('$', '').replace(',', '')
                 res_val = float(res_clean)
             except:
                 res_val = 0.0
-
+            # if reserve price is satisified, then sold, if not close it as not sold (0)
             if price >= res_val:
                 reserve_met = True
-                cur.execute("UPDATE Auction_Listings SET Status = 2 WHERE Listing_ID = ? AND Seller_Email = ?",
+                cur.execute("update Auction_Listings set Status = 2 where Listing_ID = ? and Seller_Email = ?",
                             (listing_id, seller))
             else:
-                cur.execute("UPDATE Auction_Listings SET Status = 0 WHERE Listing_ID = ? AND Seller_Email = ?",
+                cur.execute("update Auction_Listings set Status = 0 where Listing_ID = ? and Seller_Email = ?",
                             (listing_id, seller))
         db.commit()
 
         # TRIGGER NOTIFICATIONS
         # Notify Watchers
-        cur.execute("SELECT Bidder_Email FROM Watchlist WHERE Listing_ID=? AND Seller_Email=?", (listing_id, seller))
+        cur.execute("select Bidder_Email from Watchlist where Listing_ID=? and Seller_Email=?", (listing_id, seller))
         watchers = [row['Bidder_Email'] for row in cur.fetchall()]
         for watcher in watchers:
             if watcher != me:
@@ -357,40 +389,38 @@ def place_bid():
             if auction_ended:
                 create_notification(watcher, f"Auction for '{title}' is now closed.", detail_url)
 
-        # Notify Previous Bidder (The one just outbid)
+        # Notify Previous Bidder (The one you just outbid)
         if prev_high_bidder and prev_high_bidder != me:
-            create_notification(prev_high_bidder, f"You were outbid on '{title}'! Current bid: ${price}.", detail_url)
+            create_notification(prev_high_bidder, f"You were outbidded on '{title}'! Current bid is: ${price}.", detail_url)
 
         if auction_ended:
             # Notify Seller
             if reserve_met:
-                create_notification(seller, f"SOLD! '{title}' hit max bids and met reserve. Sold to {me} for ${price}.",
+                create_notification(seller, f"Sold!, '{title}' hit max bids and met reserve. Sold to {me} for ${price}",
                                     url_for('seller'))
                 # Inform Bidder Reserve Met
-                create_notification(me, f"You won '{title}'! Your bid of ${price} met the reserve price.", detail_url)
+                create_notification(me, f"You won '{title}'! Your bid of ${price} met the reserve price", detail_url)
             else:
                 create_notification(seller,
-                                    f"Auction Ended: '{title}' reached max bids but did NOT meet reserve. High bid: ${price}.",
+                                    f"Auction Ended: '{title}' reached max bids but did NOT meet reserve. High bid: ${price}",
                                     url_for('seller'))
                 # Inform Bidder Reserve Not Met
                 create_notification(me,
-                                    f"Auction ended for '{title}'. Your bid of ${price} did not meet the reserve price.",
+                                    f"Auction ended for '{title}'. Your bid of ${price} did not meet the reserve and is pending seller review",
                                     detail_url)
 
             # Notify Other Participants
-            cur.execute("SELECT DISTINCT Bidder_Email FROM Bids WHERE Listing_ID=? AND Seller_Email=?",
+            cur.execute("select distinct Bidder_Email from Bids where Listing_ID=? and Seller_Email=?",
                         (listing_id, seller))
             for p in cur.fetchall():
                 p_email = p['Bidder_Email']
-                if p_email not in [me, seller]:
-                    create_notification(p_email, f"The auction for '{title}' has ended.", detail_url)
-
-        bidder_msg('success', 'Bid placed successfully.')
+                if p_email not in [me, seller]: create_notification(p_email, f"The auction for '{title}' has ended.", detail_url)
+        bidder_msg('success', 'Bid is placed successfully.')
 
     except Exception as e:
         db.rollback()
         print(f"Bidding Error: {e}")
-        bidder_msg('danger', 'A database error occurred.')
+        bidder_msg('danger', 'A database error')
     finally:
         db.close()
 
@@ -548,7 +578,6 @@ def list_product():
     try:
         formatted_price = f"${reserve_price_num:,.2f}"
 
-        # FIX: Manually calculate the next Listing_ID for this specific seller
         cursor.execute("SELECT COALESCE(MAX(Listing_ID), 0) + 1 FROM Auction_Listings WHERE Seller_Email = ?",
                        (seller_email,))
         new_listing_id = cursor.fetchone()[0]
@@ -716,8 +745,6 @@ def process_payment():
         bidder_msg('danger', 'A database error occurred during payment.')
     finally:
         db.close()
-
-    # FIX: Added seller_email to the redirect
     return redirect(url_for('auction_detail', seller_email=seller_email, listing_id=listing_id))
 @app.route('/contact')
 def contact():
