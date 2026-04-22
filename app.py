@@ -71,7 +71,7 @@ def change_password():
     new_password = request.form.get('new_password')
     confirm_new_password = request.form.get('confirm_new_password')
 
-    # Security check: Ensure matching confirmation before proceeding
+    # make sure the two new password entries match
     if new_password != confirm_new_password:
         flash("New passwords do not match.", "password_error")
         return redirect('/settings')
@@ -79,11 +79,27 @@ def change_password():
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     try:
-        # Verify the identity of the user via current password hash
-        cursor.execute("SELECT password_hash FROM User_Login WHERE email = ?", (user_email,))
+        # verify current password before updating
+        cursor.execute(
+            '''
+            SELECT password_hash
+            FROM User_Login
+            WHERE email = ?
+            ''',
+            (user_email,)
+        )
         user = cursor.fetchone()
+
         if user and user[0] == hash_password(current_password):
-            cursor.execute("UPDATE User_Login SET password_hash = ? WHERE email = ?", (hash_password(new_password), user_email))
+            # save the new hashed password
+            cursor.execute(
+                '''
+                UPDATE User_Login
+                SET password_hash = ?
+                WHERE email = ?
+                ''',
+                (hash_password(new_password), user_email)
+            )
             conn.commit()
             flash("Your password has been updated successfully.", "password_success")
         else:
@@ -896,9 +912,13 @@ def list_product():
     try:
         formatted_price = f"${reserve_price_num:,.2f}"
 
-        # Logic to generate next unique Listing_ID for this specific seller
-        cursor.execute("SELECT COALESCE(MAX(Listing_ID), 0) + 1 FROM Auction_Listings WHERE Seller_Email = ?",
-                       (seller_email,))
+        # get next globally unique listing id
+        cursor.execute(
+            '''
+            SELECT COALESCE(MAX(Listing_ID), 0) + 1
+            FROM Auction_Listings
+            ''',
+        )
         new_listing_id = cursor.fetchone()[0]
 
         if promote_auction:
@@ -1255,8 +1275,15 @@ def settings():
 
     # Only query banking info if logged in as seller
     if is_seller:
+        # bank and balance info for sellers only
         cursor.execute(
-            "SELECT bank_routing_number, bank_account_number, balance FROM Sellers WHERE email = ?",
+            '''
+            SELECT bank_routing_number,
+                   bank_account_number,
+                   balance
+            FROM Sellers
+            WHERE email = ?
+            ''',
             (user_email,)
         )
         bank_row = cursor.fetchone()
@@ -1294,20 +1321,29 @@ def add_card():
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     try:
-        # Prevent registration of duplicate credit card numbers
-        cursor.execute("SELECT 1 FROM Credit_Cards WHERE credit_card_num = ?", (card_num,))
+        # block duplicate card numbers
+        cursor.execute(
+            '''
+            SELECT 1
+            FROM Credit_Cards
+            WHERE credit_card_num = ?
+            ''',
+            (card_num,)
+        )
         if cursor.fetchone():
             flash("This card number is already registered.", "card_error")
             conn.close()
             return redirect('/settings')
 
+        # add the new card
         cursor.execute(
             '''
             INSERT INTO Credit_Cards
-            (credit_card_num, card_type, expire_month, expire_year, security_code, Owner_email)
+            (credit_card_num, card_type, expire_month, expire_year,
+             security_code, Owner_email)
             VALUES (?, ?, ?, ?, ?, ?)
             ''',
-            (card_num, card_type, int(expire_month), int(expire_year), int(cvv), email),
+            (card_num, card_type, int(expire_month), int(expire_year), int(cvv), email)
         )
         conn.commit()
         flash("Card added successfully!", "card_success")
@@ -1331,7 +1367,16 @@ def delete_card():
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     try:
-        cursor.execute("DELETE FROM Credit_Cards WHERE credit_card_num=? AND Owner_email=?", (card_num, email))
+        # remove card, only if it belongs to this user
+        cursor.execute(
+            '''
+            DELETE
+            FROM Credit_Cards
+            WHERE credit_card_num = ?
+              AND Owner_email = ?
+            ''',
+            (card_num, email)
+        )
         conn.commit()
         flash("Card removed.", "card_success")
     except sql.Error:
@@ -1354,13 +1399,30 @@ def update_bank():
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     try:
-        # Ensure only registered sellers can store routing/account info
-        cursor.execute("SELECT 1 FROM Sellers WHERE email = ?", (email,))
+        # make sure this user is a registered seller
+        cursor.execute(
+            '''
+            SELECT 1
+            FROM Sellers
+            WHERE email = ?
+            ''',
+            (email,)
+        )
         if not cursor.fetchone():
             flash("Only sellers can update bank info.", "bank_error")
             return redirect('/settings')
 
-        cursor.execute("UPDATE Sellers SET bank_routing_number=?, bank_account_number=? WHERE email=?", (routing, int(account), email))
+        # update routing and account number
+        cursor.execute(
+            '''
+            UPDATE Sellers
+            SET bank_routing_number = ?,
+                bank_account_number = ?
+            WHERE email = ?
+            ''',
+            (routing, int(account), email)
+        )
+
         conn.commit()
         flash("Bank info updated successfully!", "bank_success")
     except (sql.Error, ValueError) as e:
@@ -1383,8 +1445,15 @@ def get_subcategories():
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
 
-    # Query ONLY the direct children of the requested parent for the dynamic drill-down UI
-    cursor.execute("SELECT category_name FROM Categories WHERE parent_category = ?", (parent,))
+    # fetch direct children of the chosen parent
+    cursor.execute(
+        '''
+        SELECT category_name
+        FROM Categories
+        WHERE parent_category = ?
+        ''',
+        (parent,)
+    )
     subcategories = [row[0] for row in cursor.fetchall()]
     conn.close()
 
@@ -1454,24 +1523,22 @@ def search():
             params.append(float(max_price))
 
     sql_query = '''
-                SELECT al.Listing_ID, 
-                       al.Seller_Email, 
-                       al.Auction_Title, 
-                       al.Product_Name, 
-                       al.Category, 
-                       al.Reserve_Price, 
-                       COUNT(b.Bid_ID)  AS bid_count, 
-                       MAX(b.Bid_Price) AS current_bid,
-                       COALESCE(lv.Business_Name, bdr.first_name || ' ' || bdr.last_name) AS seller_name,
-                       al.is_promoted
-                FROM Auction_Listings al
-                         LEFT JOIN Local_Vendors lv ON al.Seller_Email = lv.Email
-                         LEFT JOIN Bidders bdr ON al.Seller_Email = bdr.email
-                         LEFT JOIN Bids b
-                                   ON al.Listing_ID = b.Listing_ID
-                                       AND al.Seller_Email = b.Seller_Email
-                WHERE al.Status = 1 
-                '''
+        SELECT al.Listing_ID,
+               al.Seller_Email,
+               al.Auction_Title,
+               al.Product_Name,
+               al.Category,
+               al.Reserve_Price,
+               COUNT(b.Bid_ID)                                                    AS bid_count,
+               MAX(b.Bid_Price)                                                   AS current_bid,
+               COALESCE(lv.Business_Name, bdr.first_name || ' ' || bdr.last_name) AS seller_name,
+               al.is_promoted
+        FROM Auction_Listings al
+            LEFT JOIN Local_Vendors lv ON al.Seller_Email = lv.Email
+            LEFT JOIN Bidders bdr ON al.Seller_Email = bdr.email
+            LEFT JOIN Bids b ON al.Listing_ID = b.Listing_ID AND al.Seller_Email = b.Seller_Email
+        WHERE al.Status = 1
+        '''
 
     if where_clauses:
         sql_query += " AND " + " AND ".join(where_clauses)

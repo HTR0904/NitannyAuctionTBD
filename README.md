@@ -61,6 +61,25 @@ This page supports the seller-facing auction flow:
 - Receive notifications when auctions conclude
 - Update seller payment information from settings
 
+### Listing Management (Seller)
+
+The "Manage My Listings" area on `seller_home.html` shows all listings in four tabs. Each tab has a count.
+- **Active** (Status = 1): open for bidding
+- **Pending Review** (Status = 3): ended below reserve price, waiting for seller
+- **Sold** (Status = 2): sold already
+- **Inactive** (Status = 0): taken off by the seller
+
+The `/list_product` route gives each seller their own `Listing_ID` count. The SQL is `SELECT COALESCE(MAX(Listing_ID), 0) + 1 FROM Auction_Listings WHERE Seller_Email = ?`. So each seller's IDs start from 1. Reserve prices are saved like `$X,XXX.XX` to match the seed data.
+**Edit Listing** is at `/edit_listing/<listing_id>`. It has two rules:
+- Sold listings cannot be edited.
+- Active listings can only be edited when `bid_count == 0`. If anyone has already placed a bid, the Edit button is turned off with a tooltip.
+
+**Remove Listing** is at `/remove_listing/<listing_id>`. The seller fills in a reason in a modal box. The system saves the reason and the `remaining_bids` value (= `Max_bids - bid_count` at that moment) in a new `Listing_Removals` table. The listing's status is set to 0 (Inactive).
+
+**Pending Auction Review** is at `/auction_decide/<listing_id>`. It handles auctions that hit `Max_bids` but stay below the reserve price. These are set to Status = 3 (Pending Review). They show up in the Pending Review tab and in the "Auction Results" box at the bottom of `seller_home.html`. The seller can:
+- **Accept** the top bid: listing becomes Sold (Status = 2). The winning bidder gets a notification.
+- **Reject** the top bid: listing becomes Inactive (Status = 0). The bidder gets a notification.
+
 ### Helpdesk homepage
 
 This page supports the main helpdesk/admin tasks from the project checklist:
@@ -115,11 +134,16 @@ The dynamic dropdowns enable users to filter search results by specific subcateg
 The backend utilizes a BFS function (`get_category_descendants`) to identify the selected category and map its nested descendants.
 These descendants are appended to an SQL `IN` clause to ensure queries for a parent category return items from all corresponding subcategories. 
 `get_category_breadcrumbs` traverses the database hierarchy upward to generate a visual of the filter path.
+`/search` also supports keyword search and price range filter. The keyword search looks in auction title, product name, and description. 
+The price filter can switch between **reserve price** and **current highest bid**. For reserve price, the SQL uses `CAST(REPLACE(REPLACE(Reserve_Price, '$', ''), ',', '') AS REAL)` because the price is saved as text with dollar signs. 
+For current bid, the filter is in the `HAVING` clause with `MAX(Bid_Price)` because it is a group value.
 
 ### Notifications
 
-The notification feature alerts users about auction and bidding events.
-Notifications are connected to the database and can be viewed from the notifications page.
+The notification system uses a `Notifications` table. A helper called `create_notification(user_email, content, link)` is called from many places (new bids, outbid events, auction ended, seller decisions, and so on). 
+A context processor adds the unread count to every template. So the bell icon in the navbar is always up to date.
+
+On `/notifications`, users can mark one notification as read, mark all as read, delete one, or delete all. Each notification can have a link. Clicking it jumps to the right page.
 
 ### Watchlist
 
@@ -137,8 +161,42 @@ Also utilizes  the notification system to ensure watchers receive alerts when a 
 
 ### Settings
 
-The settings page supports account-related updates such as password changes and payment information.
-Sellers can update bank payment information from this page.
+`/settings` puts all account updates in one page:
+- **Password change**: checks the current password (using SHA-256 hash) before saving a new one.
+- **Credit cards**: users can add and delete saved cards. Only the last four digits are shown for safety.
+- **Bank info** (sellers only): sellers can update their routing and account numbers. The values are saved to the `Sellers` table.
+- **Logout**: ends the session and goes back to the login page.
+
+## Schema Extensions
+
+On startup, `init_db()` in `utils.py` creates two extra tables:
+
+```sql
+CREATE TABLE IF NOT EXISTS Notifications (
+    notification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_email TEXT NOT NULL,
+    content TEXT NOT NULL,
+    link TEXT,
+    is_read INTEGER NOT NULL DEFAULT 0 CHECK (is_read IN (0, 1)),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_email) REFERENCES User_Login(email)
+);
+
+CREATE TABLE IF NOT EXISTS Listing_Removals (
+    removal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    seller_email TEXT NOT NULL,
+    listing_id INTEGER NOT NULL,
+    removal_reason TEXT NOT NULL,
+    remaining_bids INTEGER NOT NULL,
+    removed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+The `Notifications` table supports the notification feature. The `Listing_Removals` table saves the audit record for listing removals. 
+It keeps the seller's reason and the remaining bids at the time of removal. This data stays even if the listing is changed or deleted later.
+
+We also added a new value `3` to `Auction_Listings.Status`. This means *Pending Seller Review* — auctions that ended below reserve price and wait for the seller to accept or reject. 
+The old values are still used: `0` (Inactive), `1` (Active), and `2` (Sold).
 
 ## Organization
 ```text
