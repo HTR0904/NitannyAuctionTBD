@@ -174,6 +174,16 @@ When a user interacts with this component `/toggle_watchlist` route handles the 
 The watchlist dashboard provides overview of all auction items and auction status
 Also utilizes  the notification system to ensure watchers receive alerts when a new bid is placed or when a tracked auction officially concludes.
 
+### Auction promotion
+The auction promotion feature allows sellers to increase the visibility of their listings by pinning them to the top of search results and category pages. 
+Sellers can opt into this feature either during the initial listing creation in `seller_home.html` or through the individual auction detail page. 
+Once an auction is promoted, a visual "Promoted" badge is displayed next to the title in search results to distinguish it from standard listings.
+
+The system enforces a one-time promotion fee calculated as 5% of the item's reserve price. 
+This fee is automatically recorded in the `promotion_fee` column of the `Auction_Listings` table and is tracked for administrative and payout purposes. 
+The backend handles this through the `/promote_auction` route in `app.py`, which updates the `is_promoted` status and logs the `promotion_timestamp`. 
+To ensure priority visibility, the search SQL query in the `/search` route utilize an `ORDER BY al.is_promoted DESC` clause, ensuring that all promoted items are rendered before non-promoted results regardless of other sorting criteria.
+
 ### Settings
 
 `/settings` puts all account updates in one page:
