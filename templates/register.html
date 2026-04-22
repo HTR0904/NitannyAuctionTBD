@@ -39,7 +39,7 @@
             box-shadow: 0 14px 30px rgba(4, 30, 66, 0.12);
             background-color: #f8fbff;
         }
-        /* Bootstrap toggle logic helpers */
+        /* Section display logic */
         .role-section { display: none; }
         .role-section.show { display: block; }
 
@@ -144,7 +144,7 @@
                         </div>
                     </div>
 
-                    <div class="role-section bidder-only show">
+                    <div class="role-section bidder-shared show">
                         <hr>
                         <div class="section-title">Personal Information</div>
                         <div class="form-row">
@@ -191,7 +191,7 @@
 
                         <div class="custom-control custom-checkbox mb-4">
                             <input type="checkbox" class="custom-control-input" id="isVendorCheckbox" name="is_vendor" onchange="toggleVendorFields()">
-                            <label class="custom-control-label font-weight-bold" for="isVendorCheckbox">I am registering as a Local Vendor / Business</label>
+                            <label class="custom-control-label font-weight-bold" for="isVendorCheckbox">I am registering as a Local Vendor / Business </label>
                             <p class="text-muted small">Check this if you represent a physical business rather than an individual seller.</p>
                         </div>
 
@@ -295,18 +295,22 @@
         // Section Toggles
         document.querySelectorAll('.role-section').forEach(el => el.classList.remove('show'));
 
-        if (role === 'bidder') {
-            document.querySelector('.bidder-only').classList.add('show');
-        } else if (role === 'seller') {
-            document.querySelector('.seller-banking').classList.add('show');
-            toggleVendorFields(); // Check if vendor box was already ticked
+        // All sellers are bidders, so both roles see the personal info section
+        if (role === 'bidder' || role === 'seller') {
+            document.querySelector('.bidder-shared').classList.add('show');
+
+            if (role === 'seller') {
+                document.querySelector('.seller-banking').classList.add('show');
+                toggleVendorFields();
+            }
         } else if (role === 'helpdesk') {
             document.querySelector('.helpdesk-only').classList.add('show');
         }
 
-        // Basic Requirement Management
-        document.getElementById('first_name').required = (role === 'bidder');
-        document.getElementById('last_name').required = (role === 'bidder');
+        // Requirement Management
+        const isUserRole = (role === 'bidder' || role === 'seller');
+        document.getElementById('first_name').required = isUserRole;
+        document.getElementById('last_name').required = isUserRole;
 
         const isSeller = (role === 'seller');
         document.getElementById('bank_routing_number').required = isSeller;

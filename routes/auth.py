@@ -129,105 +129,96 @@ def register():
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     try:
+        # Check existing user
         cursor.execute("SELECT email FROM User_Login WHERE email = ?", (email,))
         if cursor.fetchone():
             return render_template('register.html', error="This email is already registered.")
 
-        # HELPDESK REGISTRATION
+        # Base Login Entry (Common to all)
+        cursor.execute("INSERT INTO User_Login (email, password_hash) VALUES (?, ?)",
+                       (email, hash_password(password)))
+
+        # Helpdesk Registration
         if role == 'helpdesk':
             position = request.form.get('position', '').strip() or 'Helpdesk Staff'
-
-            # Using established User_Login table and hash_password function
-            cursor.execute("INSERT INTO User_Login (email, password_hash) VALUES (?, ?)",
-                           (email, hash_password(password)))
-
-            # Helpdesk staff info as per schema
             cursor.execute("INSERT INTO Helpdesk (email, position) VALUES (?, ?)", (email, position))
 
-            # Registration request as per schema
+            # Create the required staff request
             cursor.execute(
                 '''
                 INSERT INTO Requests (sender_email, helpdesk_staff_email, request_type, request_desc, request_status)
                 VALUES (?, ?, ?, ?, ?)
                 ''',
-                (email, DEFAULT_HELPDESK_EMAIL, 'Registration', position, 0),
-            )
-            conn.commit()
-            return render_template('register.html', success="Staff registration submitted!")
-
-        # BIDDER / SELLER SHARED INFO
-        # Sellers are a subset of Bidders, so we always populate Bidders
-        first_name = request.form.get('first_name', '').strip()
-        last_name = request.form.get('last_name', '').strip()
-        age = request.form.get('age')
-        major = request.form.get('major', '').strip() or None
-
-        # Handle Home Address
-        home_address_id = None
-        h_street_num = request.form.get('street_num')
-        h_street_name = request.form.get('street_name', '').strip()
-        h_zipcode = request.form.get('zipcode')
-
-        if h_street_num and h_street_name and h_zipcode:
-            home_address_id = uuid.uuid4().hex
-            cursor.execute(
-                "INSERT INTO Address (address_id, zipcode, street_num, street_name) VALUES (?, ?, ?, ?)",
-                (home_address_id, h_zipcode, h_street_num, h_street_name),
+                (email, DEFAULT_HELPDESK_EMAIL, 'Registration', position, 0),  # 0: incomplete [cite: 15]
             )
 
-        # Core User and Bidder entries
-        cursor.execute("INSERT INTO User_Login (email, password_hash) VALUES (?, ?)", (email, hash_password(password)))
-        cursor.execute(
-            '''
-            INSERT INTO Bidders (email, first_name, last_name, age, home_address_id, major)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ''',
-            (email, first_name, last_name, age or None, home_address_id, major),
-        )
+        #  BIDDER & SELLER
+        else:
+            # Everyone who isn't helpdesk is a Bidder
+            first_name = request.form.get('first_name', '').strip()
+            last_name = request.form.get('last_name', '').strip()
+            age = request.form.get('age')
+            major = request.form.get('major', '').strip() or None
 
-        # Seller Logic
-        if role == 'seller':
-            bank_routing = request.form.get('bank_routing_number', '').strip()
-            bank_account = request.form.get('bank_account_number')
+            # Handle Home Address
+            home_address_id = None
+            h_street_num = request.form.get('street_num')
+            h_street_name = request.form.get('street_name', '').strip()
+            h_zipcode = request.form.get('zipcode')
 
-            # Populate Sellers table
+            if h_street_num and h_street_name and h_zipcode:
+                home_address_id = uuid.uuid4().hex
+                cursor.execute(
+                    "INSERT INTO Address (address_id, zipcode, street_num, street_name) VALUES (?, ?, ?, ?)",
+                    (home_address_id, h_zipcode, h_street_num, h_street_name),
+                )
+
             cursor.execute(
                 '''
-                INSERT INTO Sellers (email, bank_routing_number, bank_account_number, balance)
-                VALUES (?, ?, ?, 0)
+                INSERT INTO Bidders (email, first_name, last_name, age, home_address_id, major)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ''',
-                (email, bank_routing, bank_account),
+                (email, first_name, last_name, age or None, home_address_id, major),
             )
 
-            # Populate Local_Vendors if applicable
-            if is_vendor:
-                business_name = request.form.get('business_name', '').strip()
-                phone = request.form.get('customer_service_phone', '').strip()
-
-                # Separate Address entry for Business Address
-                biz_address_id = None
-                v_street_num = request.form.get('v_street_num')
-                v_street_name = request.form.get('v_street_name', '').strip()
-                v_zipcode = request.form.get('v_zipcode')
-
-                if v_street_num and v_street_name and v_zipcode:
-                    biz_address_id = uuid.uuid4().hex
-                    cursor.execute(
-                        "INSERT INTO Address (address_id, zipcode, street_num, street_name) VALUES (?, ?, ?, ?)",
-                        (biz_address_id, v_zipcode, v_street_num, v_street_name),
-                    )
-
+            # Seller banking details
+            if role == 'seller':
+                bank_routing = request.form.get('bank_routing_number', '').strip()
+                bank_account = request.form.get('bank_account_number')
                 cursor.execute(
-                    '''
-                    INSERT INTO Local_Vendors (Email, Business_Name, Business_Address_ID, Customer_Service_Phone_Number)
-                    VALUES (?, ?, ?, ?)
-                    ''',
-                    (email, business_name, biz_address_id, phone),
+                    "INSERT INTO Sellers (email, bank_routing_number, bank_account_number, balance) VALUES (?, ?, ?, 0)",
+                    (email, bank_routing, bank_account),
                 )
+
+                # Local Vendor forms goes here
+                if is_vendor:
+                    business_name = request.form.get('business_name', '').strip()
+                    phone = request.form.get('customer_service_phone', '').strip()
+
+                    biz_address_id = None
+                    v_street_num = request.form.get('v_street_num')
+                    v_street_name = request.form.get('v_street_name', '').strip()
+                    v_zipcode = request.form.get('v_zipcode')
+
+                    if v_street_num and v_street_name and v_zipcode:
+                        biz_address_id = uuid.uuid4().hex
+                        cursor.execute(
+                            "INSERT INTO Address (address_id, zipcode, street_num, street_name) VALUES (?, ?, ?, ?)",
+                            (biz_address_id, v_zipcode, v_street_num, v_street_name),
+                        )
+
+                    cursor.execute(
+                        '''
+                        INSERT INTO Local_Vendors (Email, Business_Name, Business_Address_ID,
+                                                   Customer_Service_Phone_Number)
+                        VALUES (?, ?, ?, ?)
+                        ''',
+                        (email, business_name, biz_address_id, phone),
+                    )
 
         conn.commit()
         ensure_app_user(email, role)
-        return render_template('register.html', success=f"Account created successfully as a {role}!")
+        return render_template('register.html', success=f"Account created as {role}!")
 
     except sql.Error as e:
         conn.rollback()

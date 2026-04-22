@@ -28,6 +28,20 @@ An error is shown if the role is not recognized.
 
 Passwords are never stored as plain text and hashing is used throughout to improve security.
 
+### User Registration
+The system uses single dynamic frontend to handle registration form. 
+Role-selection mechanism allows users to toggle between account types while JavaScript function `selectRole` 
+manages the visibility of specific form sections while simultaneously updating the required attributes for 
+relevant input fields to ensure data integrity before submission. 
+
+Sellers are provided with a specialized toggle to register as a Local Vendor, 
+which reveals additional fields for business names, customer service contact information, and business addresses.
+
+The system processes registration data through `auth.register` route.
+
+Which verifies that the email is not already registered and password security is enforced by generating a SHA-256 hash using the hash_password utility before any data is committed. 
+For all users, the system populates the User_Login table, but the subsequent relational logic varies by role. 
+
 ### Bidder homepage
 
 This page supports the bidder-facing auction flow:
@@ -93,6 +107,7 @@ This structure is used for the following feature:
 Staff use the cascading dropdown menus to navigate the existing tree and select a parent node. 
 They can then input a new category name, which is inserted into the database as a child of the selected node. 
 The UI also provides a visual map of the category tree that fetches subcategories via AJAX when a node is expanded.
+
 #### Seller (Listing Creation):
 The "List a Product" form prompts sellers to select a top-level category and proceed through generated subcategories to 
 specify the product classification before submission.
@@ -165,11 +180,14 @@ Project_Root/
 
 ---
 
+## Instructions on how to initialize database
+
+
 ## Instructions on how to run the code
 
 ### Prerequisites
 * PyCharm Pro
-* Python 3.x installed
+* Python 3.x installed (recommended Python 3.13)
 
 ### Loading the Files into PyCharm Professional
 1. Open PyCharm Professional.
