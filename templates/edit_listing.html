@@ -77,6 +77,19 @@
                 </div>
             </div>
 
+            {% if not item.is_promoted %}
+            <div class="form-group form-check bg-light p-3 border rounded mt-3 mb-4">
+                <input type="checkbox" class="form-check-input ml-1" id="promoteListing" name="promote_auction" value="yes">
+                <label class="form-check-label font-weight-bold ml-4 text-dark" for="promoteListing">Promote this auction</label>
+                <small class="d-block text-muted ml-4 mt-1">A one-time fee equal to 5% of your reserve price will be charged. Promoted items are pinned to the top of search results and category pages.</small>
+            </div>
+            {% else %}
+            <div class="alert alert-warning mt-3 mb-4 border-warning text-dark" style="background-color: #fff9e6;">
+                <strong>Promoted Listing</strong><br>
+                <small>This auction is already promoted and will appear at the top of relevant search and category pages.</small>
+            </div>
+            {% endif %}
+
             <div class="d-flex justify-content-between mt-4">
                 <a href="/seller#my-listings" class="btn btn-outline-secondary">Cancel</a>
                 <button type="submit" class="btn btn-navy">Save Changes</button>

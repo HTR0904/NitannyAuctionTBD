@@ -183,6 +183,7 @@ def auction_detail(seller_email, listing_id):
             a.Max_bids as max_bids,
             a.Reserve_Price as reserve_price,
             a.Status as status_code,
+            a.is_promoted as is_promoted,
             (   select COALESCE(max(b.Bid_Price), 0)
                 from Bids b
                 where b.Seller_Email = a.Seller_Email
@@ -504,7 +505,8 @@ def seller():
                al.Max_bids,
                al.Status,
                COUNT(b.Bid_ID)  AS bid_count,
-               MAX(b.Bid_Price) AS current_bid
+               MAX(b.Bid_Price) AS current_bid,
+               al.is_promoted
         FROM Auction_Listings al
                  LEFT JOIN Bids b ON al.Listing_ID = b.Listing_ID AND al.Seller_Email = b.Seller_Email
         WHERE al.Seller_Email = ?
@@ -530,6 +532,7 @@ def seller():
             'status': row[6],
             'bid_count': row[7],
             'current_bid': row[8],
+            'is_promoted': row[9] == 1
         }
         if row[6] == 1:
             active_listings.append(listing)
@@ -616,6 +619,7 @@ def remove_listing(listing_id):
 
     return redirect('/seller#my-listings')
 
+
 @app.route('/edit_listing/<int:listing_id>', methods=['GET', 'POST'])
 def edit_listing(listing_id):
     if 'user_email' not in session or session.get('account_type') != '/seller':
@@ -627,12 +631,21 @@ def edit_listing(listing_id):
 
     cursor.execute(
         '''
-        SELECT al.Listing_ID, al.Auction_Title, al.Product_Name, al.Product_Description,
-               al.Category, al.Reserve_Price, al.Quantity, al.Max_bids, al.Status,
-               COUNT(b.Bid_ID) AS bid_count
+        SELECT al.Listing_ID,
+               al.Auction_Title,
+               al.Product_Name,
+               al.Product_Description,
+               al.Category,
+               al.Reserve_Price,
+               al.Quantity,
+               al.Max_bids,
+               al.Status,
+               COUNT(b.Bid_ID) AS bid_count,
+               al.is_promoted
         FROM Auction_Listings al
-        LEFT JOIN Bids b ON al.Listing_ID = b.Listing_ID AND al.Seller_Email = b.Seller_Email
-        WHERE al.Listing_ID = ? AND al.Seller_Email = ?
+                 LEFT JOIN Bids b ON al.Listing_ID = b.Listing_ID AND al.Seller_Email = b.Seller_Email
+        WHERE al.Listing_ID = ?
+          AND al.Seller_Email = ?
         GROUP BY al.Listing_ID
         ''',
         (listing_id, seller_email)
@@ -677,6 +690,7 @@ def edit_listing(listing_id):
             'reserve_price_numeric': reserve_numeric,
             'quantity': row[6],
             'max_bids': row[7],
+            'is_promoted': row[10] == 1
         }
         conn.close()
         return render_template('edit_listing.html', item=item)
@@ -688,6 +702,7 @@ def edit_listing(listing_id):
     reserve_price = request.form.get('reserve_price')
     quantity = request.form.get('quantity')
     max_bids = request.form.get('max_bids')
+    promote_auction = request.form.get('promote_auction') == 'yes'
 
     if not all([auction_title, product_name, product_description, category, reserve_price, quantity, max_bids]):
         conn.close()
@@ -709,16 +724,46 @@ def edit_listing(listing_id):
 
     try:
         formatted_price = f"${reserve_price_num:,.2f}"
-        cursor.execute(
-            '''
-            UPDATE Auction_Listings
-            SET Auction_Title = ?, Product_Name = ?, Product_Description = ?,
-                Category = ?, Reserve_Price = ?, Quantity = ?, Max_bids = ?
-            WHERE Listing_ID = ? AND Seller_Email = ?
-            ''',
-            (auction_title, product_name, product_description, category,
-             formatted_price, quantity_int, max_bids_int, listing_id, seller_email)
-        )
+
+        if promote_auction:
+            promotion_fee = reserve_price_num * 0.05
+            cursor.execute(
+                '''
+                UPDATE Auction_Listings
+                SET Auction_Title       = ?,
+                    Product_Name        = ?,
+                    Product_Description = ?,
+                    Category            = ?,
+                    Reserve_Price       = ?,
+                    Quantity            = ?,
+                    Max_bids            = ?,
+                    is_promoted         = 1,
+                    promotion_timestamp = CURRENT_TIMESTAMP,
+                    promotion_fee       = ?
+                WHERE Listing_ID = ?
+                  AND Seller_Email = ?
+                ''',
+                (auction_title, product_name, product_description, category,
+                 formatted_price, quantity_int, max_bids_int, promotion_fee, listing_id, seller_email)
+            )
+        else:
+            cursor.execute(
+                '''
+                UPDATE Auction_Listings
+                SET Auction_Title       = ?,
+                    Product_Name        = ?,
+                    Product_Description = ?,
+                    Category            = ?,
+                    Reserve_Price       = ?,
+                    Quantity            = ?,
+                    Max_bids            = ?
+                WHERE Listing_ID = ?
+                  AND Seller_Email = ?
+                ''',
+                (auction_title, product_name, product_description, category,
+                 formatted_price, quantity_int, max_bids_int, listing_id, seller_email)
+            )
+
         conn.commit()
         flash(f"Listing #{listing_id} updated successfully!", "listing_success")
     except sql.Error as e:
@@ -728,6 +773,7 @@ def edit_listing(listing_id):
     finally:
         conn.close()
     return redirect('/seller#my-listings')
+
 
 @app.route('/list_product', methods=['POST'])
 def list_product():
@@ -742,6 +788,7 @@ def list_product():
     reserve_price = request.form.get('reserve_price')
     quantity = request.form.get('quantity')
     max_bids = request.form.get('max_bids')
+    promote_auction = request.form.get('promote_auction') == 'yes'
 
     def render_seller(**kwargs):
         conn = sql.connect(DB_NAME)
@@ -758,7 +805,8 @@ def list_product():
                    al.Max_bids,
                    al.Status,
                    COUNT(b.Bid_ID)  AS bid_count,
-                   MAX(b.Bid_Price) AS current_bid
+                   MAX(b.Bid_Price) AS current_bid,
+                   al.is_promoted
             FROM Auction_Listings al
                      LEFT JOIN Bids b ON al.Listing_ID = b.Listing_ID AND al.Seller_Email = b.Seller_Email
             WHERE al.Seller_Email = ?
@@ -784,6 +832,7 @@ def list_product():
                 'status': row[6],
                 'bid_count': row[7],
                 'current_bid': row[8],
+                'is_promoted': row[9] == 1
             }
             if row[6] == 1:
                 active_listings.append(listing)
@@ -828,16 +877,30 @@ def list_product():
                        (seller_email,))
         new_listing_id = cursor.fetchone()[0]
 
-        cursor.execute(
-            '''
-            INSERT INTO Auction_Listings
-            (Listing_ID, Seller_Email, Category, Auction_Title, Product_Name, Product_Description,
-             Quantity, Reserve_Price, Max_bids, Status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-            ''',
-            (new_listing_id, seller_email, category, auction_title, product_name, product_description, quantity_int,
-             formatted_price, max_bids_int),
-        )
+        if promote_auction:
+            promotion_fee = reserve_price_num * 0.05
+            cursor.execute(
+                '''
+                INSERT INTO Auction_Listings
+                (Listing_ID, Seller_Email, Category, Auction_Title, Product_Name, Product_Description,
+                 Quantity, Reserve_Price, Max_bids, Status, is_promoted, promotion_timestamp, promotion_fee)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, CURRENT_TIMESTAMP, ?)
+                ''',
+                (new_listing_id, seller_email, category, auction_title, product_name, product_description, quantity_int,
+                 formatted_price, max_bids_int, promotion_fee),
+            )
+        else:
+            cursor.execute(
+                '''
+                INSERT INTO Auction_Listings
+                (Listing_ID, Seller_Email, Category, Auction_Title, Product_Name, Product_Description,
+                 Quantity, Reserve_Price, Max_bids, Status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                ''',
+                (new_listing_id, seller_email, category, auction_title, product_name, product_description, quantity_int,
+                 formatted_price, max_bids_int),
+            )
+
         conn.commit()
         return render_seller(listing_success=f"Listing created successfully! Listing ID: {new_listing_id}")
     except sql.Error as e:
@@ -944,7 +1007,6 @@ def process_payment():
     cur = db.cursor()
 
     try:
-        # Handle "New Card" entry
         if selected_card == 'new':
             card_type = request.form.get('card_type')
             cc_num = request.form.get('credit_card_num')
@@ -952,17 +1014,14 @@ def process_payment():
             exp_y = request.form.get('expire_year')
             cvv = request.form.get('security_code')
 
-            # Insert the new card into the database first
             cur.execute("""
                         INSERT INTO Credit_Cards (credit_card_num, card_type, expire_month, expire_year, security_code,
                                                   Owner_email)
                         VALUES (?, ?, ?, ?, ?, ?)
                         """, (cc_num, card_type, exp_m, exp_y, cvv, me))
 
-            # Use this new card for the transaction
             selected_card = cc_num
         else:
-            # Existing logic: Verify the selected saved card belongs to the user
             cur.execute("""
                         SELECT 1
                         FROM Credit_Cards
@@ -974,11 +1033,20 @@ def process_payment():
                 bidder_msg('danger', 'Invalid payment method selected.')
                 return redirect(url_for('checkout', seller_email=seller_email, listing_id=listing_id))
 
-        # Process Transaction
+        # Check for any promotion fee owed by the seller
+        cur.execute("SELECT COALESCE(promotion_fee, 0) FROM Auction_Listings WHERE Listing_ID = ? AND Seller_Email = ?", (listing_id, seller_email))
+        fee_row = cur.fetchone()
+        promo_fee = fee_row['COALESCE(promotion_fee, 0)'] if fee_row else 0.0
+
+        # Log Transaction
         cur.execute("""
                     INSERT INTO Transactions (Seller_Email, Listing_ID, Bidder_Email, Date, Payment)
                     VALUES (?, ?, ?, date('now'), ?)
                     """, (seller_email, listing_id, me, amount_due))
+
+        # Deduct the promotion fee from the earnings and add the net total to the Seller's balance
+        net_earnings = amount_due - promo_fee
+        cur.execute("UPDATE Sellers SET balance = balance + ? WHERE email = ?", (net_earnings, seller_email))
 
         db.commit()
         bidder_msg('success', 'Payment successful! Transaction complete.')
@@ -1403,6 +1471,7 @@ def search():
                            user_email=session.get('user_email'),
                            account_type=session.get('account_type'))
 
+
 @app.route('/promote_auction', methods=['POST'])
 def promote_auction():
     if 'user_email' not in session or session.get('account_type') != '/seller':
@@ -1414,11 +1483,17 @@ def promote_auction():
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT Reserve_Price, is_promoted FROM Auction_Listings WHERE Listing_ID = ? AND Seller_Email = ?", (listing_id, seller_email))
+        cursor.execute(
+            "SELECT Reserve_Price, is_promoted, Status FROM Auction_Listings WHERE Listing_ID = ? AND Seller_Email = ?",
+            (listing_id, seller_email))
         item = cursor.fetchone()
 
         if item:
-            if item[1] == 1:
+            status = item[2]
+
+            if status != 1:
+                flash("Cannot promote a closed or removed auction.", "listing_error")
+            elif item[1] == 1:
                 flash("Auction is already promoted.", "listing_error")
             else:
                 try:
@@ -1430,10 +1505,13 @@ def promote_auction():
                 fee = res_val * 0.05
 
                 cursor.execute("""
-                    UPDATE Auction_Listings
-                    SET is_promoted = 1, promotion_timestamp = CURRENT_TIMESTAMP, promotion_fee = ?
-                    WHERE Listing_ID = ? AND Seller_Email = ?
-                """, (fee, listing_id, seller_email))
+                               UPDATE Auction_Listings
+                               SET is_promoted         = 1,
+                                   promotion_timestamp = CURRENT_TIMESTAMP,
+                                   promotion_fee       = ?
+                               WHERE Listing_ID = ?
+                                 AND Seller_Email = ?
+                               """, (fee, listing_id, seller_email))
                 conn.commit()
                 flash(f"Auction #{listing_id} successfully promoted for a fee of ${fee:.2f}.", "listing_success")
         else:

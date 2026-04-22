@@ -11,6 +11,11 @@
         .bg-navy { background-color: #041E42; }
         .text-navy { color: #041E42; }
         .btn-navy { background-color: #041E42; color: white; border: none; }
+        .btn-navy:hover { background-color: #153d72; color: white; }
+
+        .btn-outline-navy { color: #041E42; border-color: #041E42; background-color: transparent; }
+        .btn-outline-navy:hover { color: white; background-color: #041E42; }
+
         .box { background: white; border: 1px solid #dee2e6; border-radius: 4px; box-shadow: 0 .125rem .25rem rgba(0,0,0,.075); }
         .small-muted { font-size: 0.85rem; color: #6c757d; }
     </style>
@@ -70,6 +75,35 @@
                         </tbody>
                     </table>
                 </div>
+
+              {# Promote Button for Seller #}
+                {% if item.seller_email == user_email %}
+                    {% if not item.is_promoted %}
+                    <div class="mt-4 p-4 rounded box" style="background-color: #f4f7fb; border: 1px solid #dbe4f0;">
+                        <div class="d-flex align-items-center mb-2">
+                            <h5 class="text-navy font-weight-bold mb-0">Promote Listing</h5>
+                        </div>
+                        <p class="small text-muted mb-3">
+                            Increase your item's visibility! Promoted items are pinned to the top of search results and category pages. A one-time fee equal to <strong>5% of your reserve price</strong> applies.
+                        </p>
+                        <form action="/promote_auction" method="POST">
+                            <input type="hidden" name="listing_id" value="{{ item.listing_id }}">
+                            <button type="submit" class="btn btn-outline-navy font-weight-bold px-4" onclick="return confirm('Promote this auction? A fee of 5% of your reserve price will be charged.');">
+                                <span style="color: #d4af37;">★</span> Promote Now
+                            </button>
+                        </form>
+                    </div>
+                    {% else %}
+                    <div class="mt-4 p-3 rounded box d-flex align-items-center" style="background-color: #f8f9fa; border-left: 4px solid #041E42;">
+                        <span style="color: #d4af37; font-size: 1.5rem; margin-right: 15px;">★</span>
+                        <div>
+                            <strong class="text-navy">Promoted Listing</strong><br>
+                            <small class="text-muted">This auction is currently promoted and pinned to the top of relevant search pages.</small>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endif %}
+
             </div>
 
             {% if session.get('account_type') == '/bidder' %}
