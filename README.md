@@ -167,12 +167,6 @@ Project_Root/
 4. Click the link to open the Nittany Auction login portal in your browser.
 
 ---
-## Contributing to the Repo (through Github)
-> This section is for team members' reference
-
-For instructions on how to set up this project on your device,
-along with some useful commands and guidelines when working with git,
-please visit the [set-up page](setup.md)
 
 ## Resources Used
-Links to all resources used in the process of website creation [resources page](resources.md)
+Links to all resources used in the process of project development [resources page](resources.md)
