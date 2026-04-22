@@ -252,9 +252,10 @@ Project_Root/
 ---
 
 ## Instructions on how to initialize database
-1. Open dataset_tables and select user_raw
-2. Import hashlib and run "sha256(password)" for each password to get your protected password
-3. Store in seperate table
+1. Open MySql.
+2. Create table framework.
+3. Import csv files into their respected table.
+4. Save as db file. 
 
 ## Instructions on how to run the code
 
