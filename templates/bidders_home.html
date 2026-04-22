@@ -11,12 +11,17 @@
         .text-navy { color: #041e42; }
         .btn-navy { background-color: #041e42; color: white; border: none; }
         .btn-navy:hover { color: white; background-color: #062b5d; }
+
+        .btn-outline-navy { color: #041E42; border-color: #041E42; background-color: transparent; }
+        .btn-outline-navy:hover { color: white; background-color: #041E42; }
+
         .surface-card { background: white; border-radius: 18px; box-shadow: 0 16px 40px rgba(4, 30, 66, 0.08); border: 0; }
         .small-muted { font-size: 0.85rem; color: #6c757d; }
         .listing-card { border: 1px solid #e5e9ef; border-radius: 10px; transition: box-shadow 0.15s ease, transform 0.15s ease; }
         .listing-card:hover { box-shadow: 0 0.5rem 1rem rgba(4, 30, 66, 0.12); transform: translateY(-1px); }
         .status-pill { border-radius: 999px; padding: 0.25rem 0.65rem; font-size: 0.78rem; font-weight: 700; }
-        .status-active { background: #e8f3ff; color: #005a9c; }
+
+        .status-active { background: #eef3fb; color: #153d72; }
         .status-complete { background: #e8f5e9; color: #256029; }
         .status-payment { background: #fff3cd; color: #856404; }
         .status-muted { background: #f1f3f5; color: #495057; }
@@ -159,7 +164,7 @@
                         <th>Winning Bid</th>
                         <th>Total Bids</th>
                         <th>Status</th>
-                        <th></th>
+                        <th>Action</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -176,7 +181,7 @@
                             <td>${{ item.amount_due }}</td>
                             <td>{{ item.bid_count }}</td>
                             <td><span class="status-pill status-payment">Payment needed</span></td>
-                            <td class="text-right">
+                            <td>
                                 <a class="btn btn-success btn-sm"
                                    href="{{ url_for('checkout', seller_email=item.seller_email, listing_id=item.listing_id) }}">
                                     Complete Payment
@@ -210,7 +215,7 @@
                         <th>Seller</th>
                         <th>Payment</th>
                         <th>Review</th>
-                        <th></th>
+                        <th>Action</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -232,8 +237,8 @@
                                     <span class="status-pill status-muted">Ready to review</span>
                                 {% endif %}
                             </td>
-                            <td class="text-right">
-                                <a class="btn btn-outline-primary btn-sm"
+                            <td>
+                                <a class="btn btn-outline-navy btn-sm"
                                    href="{{ url_for('auction_detail', seller_email=sale.seller_email, listing_id=sale.listing_id) }}">
                                     Open Auction
                                 </a>

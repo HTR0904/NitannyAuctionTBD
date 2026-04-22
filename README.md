@@ -29,19 +29,17 @@ An error is shown if the role is not recognized.
 Passwords are never stored as plain text and hashing is used throughout to improve security.
 
 ### User Registration
-The system uses single dynamic frontend to handle registration form. 
-Role-selection mechanism allows users to toggle between account types while JavaScript function `selectRole` 
-manages the visibility of specific form sections while simultaneously updating the required attributes for 
-relevant input fields to ensure data integrity before submission. 
+The registration system uses a single dynamic frontend within `register.html` to manage the account creation process. 
+A role-selection mechanism allows users to toggle between Bidder, Seller, and Helpdesk account types, 
+which triggers the JavaScript function `selectRole` to manage 
+the visibility of specific form sections. 
+This function also updates the `required` attributes for relevant input fields to ensure data integrity before the form is submitted. 
+Sellers are also provided with a specialized toggle to register as a Local Vendor.
 
-Sellers are provided with a specialized toggle to register as a Local Vendor, 
-which reveals additional fields for business names, customer service contact information, and business addresses.
+On the backend, the system processes registration data through the `auth.register` route 
+located in `auth.py`. The application first verifies that the input email is not already registered in the `User_Login` table and enforces password security by generating a SHA-256 hash using the `hash_password` utility before any data is committed. While the system populates the `User_Login` table for all users, the subsequent relational logic diverges by role. Helpdesk registration involves an insertion into the `Helpdesk` table and the simultaneous creation of a registration-type ticket in the `Requests` table with an initial status of incomplete for administrative review.
 
-The system processes registration data through `auth.register` route.
-
-Which verifies that the email is not already registered and password security is enforced by generating a SHA-256 hash using the hash_password utility before any data is committed. 
-For all users, the system populates the User_Login table, but the subsequent relational logic varies by role. 
-
+For Bidder and Seller accounts, the system manages physical location data by inserting home address details into a dedicated `Address` table using unique UUIDs generated via `uuid.uuid4().hex`. Because the platform treats Sellers as a functional subset of Bidders, the application ensures that seller registrations populate both the `Bidders` and `Sellers` tables. If a seller registers as a Local Vendor, the backend performs an additional address insertion for the business location and records commercial details in the `Local_Vendors` table. After successfully committing these database transactions, the system calls the `ensure_app_user` helper and triggers a Bootstrap modal in `register.html` to confirm account creation and direct the user to the login portal.
 ### Bidder homepage
 
 This page supports the bidder-facing auction flow:
