@@ -6,8 +6,23 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
     <title>Search - Nittany Auction</title>
     <style>
-        .bg-navy { background-color: #041E42; }
-        .text-navy { color: #041E42; }
+        :root { --navy: #041E42; --navy-soft: #153d72; --cloud: #eef3fb; }
+        .bg-navy { background-color: var(--navy); }
+        .text-navy { color: var(--navy); }
+        .badge-navy {
+            background-color: var(--cloud);
+            color: var(--navy-soft);
+            font-weight: 600;
+            padding: 0.4em 0.8em;
+        }
+        .breadcrumb-arrow { color: #adb5bd; margin: 0 4px; font-weight: bold; }
+        .btn-outline-navy {
+            color: var(--navy);
+            border-color: var(--navy);
+            background-color: transparent;
+        }
+        .btn-outline-navy:hover { color: white; background-color: var(--navy); }
+
         .filter-panel {
             background-color: white;
             border: 1px solid #dee2e6;
@@ -55,13 +70,15 @@
                         <label><small><strong>Category Drill-down</strong></small></label>
 
                         {% if breadcrumbs %}
-                            <div id="active-category-display" class="mb-3 p-2 border rounded bg-white shadow-sm">
-                                <small class="text-muted d-block mb-1">Active Filter:</small>
-                                {% for crumb in breadcrumbs %}
-                                    <span class="badge badge-info">{{ crumb }}</span>
-                                    {% if not loop.last %}<small class="text-muted">&gt;</small>{% endif %}
-                                {% endfor %}
-                                <button type="button" id="clear-category-btn" class="btn btn-sm btn-outline-danger btn-block mt-2 py-0">Clear & Change</button>
+                            <div id="active-category-display" class="mb-3 p-3 border rounded bg-white shadow-sm">
+                                <small class="text-muted d-block mb-2">Active Filter:</small>
+                                <div class="d-flex flex-wrap align-items-center">
+                                    {% for crumb in breadcrumbs %}
+                                        <span class="badge badge-navy">{{ crumb }}</span>
+                                        {% if not loop.last %}<span class="breadcrumb-arrow">&rsaquo;</span>{% endif %}
+                                    {% endfor %}
+                                </div>
+                                <button type="button" id="clear-category-btn" class="btn btn-sm btn-outline-navy btn-block mt-3 py-1">Clear & Change</button>
                             </div>
                         {% endif %}
 
@@ -118,10 +135,10 @@
 
                 {% for item in results %}
                 <div class="result-card">
-                    <div class="row">
+                    <div class="row align-items-center">
                         <div class="col-md-8">
                             <h5 class="mb-1">
-                                <a href="/auction/{{ item.seller_email }}/{{ item.listing_id }}" class="text-navy text-decoration-none">
+                                <a href="/auction/{{ item.seller_email }}/{{ item.listing_id }}" class="text-navy text-decoration-none font-weight-bold">
                                     {{ item.auction_title }}
                                 </a>
                                 {% if item.is_promoted %}
@@ -131,7 +148,7 @@
                             <p class="text-muted mb-1">{{ item.product_name }}</p>
 
                             <small class="text-muted">
-                                <span class="badge badge-light">{{ item.category }}</span>
+                                <span class="badge badge-light" style="background-color: var(--cloud);">{{ item.category }}</span>
                                 &nbsp; Listing #{{ item.listing_id }}
                                 &nbsp; | &nbsp; <strong>Seller:</strong> {{ item.seller_name }}
                             </small>
@@ -147,7 +164,6 @@
                                 <small class="text-muted">Starting from {{ item.reserve_price }}</small>
                             {% endif %}
                         </div>
-
                     </div>
                 </div>
                 {% endfor %}
