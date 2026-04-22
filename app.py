@@ -838,47 +838,69 @@ def watchlist():
         watchlist=watched_items
     )
 
+
 @app.route('/settings')
 def settings():
     if 'user_email' not in session:
         return redirect('/')
 
     user_email = session['user_email']
+
+    # Determine seller status from the session
     account_type_raw = session.get('account_type', '').strip('/')
+    is_seller = (account_type_raw == 'seller')
 
     conn = sql.connect(DB_NAME)
+    # Using Row factory to access columns by name: row['balance']
+    conn.row_factory = sql.Row
     cursor = conn.cursor()
+
+    # Fetch Credit Cards
     cursor.execute(
         '''
         SELECT credit_card_num, card_type, expire_month, expire_year
-        FROM Credit_Cards WHERE Owner_email = ?
+        FROM Credit_Cards
+        WHERE Owner_email = ?
         ''',
         (user_email,),
     )
     cards = []
     for row in cursor.fetchall():
         cards.append({
-            'credit_card_num': row[0],
-            'card_type': row[1].strip(),
-            'expire_month': row[2],
-            'expire_year': row[3],
-            'last_four': row[0].split('-')[-1],
+            'credit_card_num': row['credit_card_num'],
+            'card_type': row['card_type'].strip(),
+            'expire_month': row['expire_month'],
+            'expire_year': row['expire_year'],
+            'last_four': row['credit_card_num'].split('-')[-1],
         })
 
-    cursor.execute("SELECT bank_routing_number, bank_account_number, balance FROM Sellers WHERE email = ?", (user_email,))
-    bank_row = cursor.fetchone()
-    is_seller = bank_row is not None
+    bank_routing = None
+    bank_account = None
+    balance = 0
+
+    # Only query banking info if logged in as seller
+    if is_seller:
+        cursor.execute(
+            "SELECT bank_routing_number, bank_account_number, balance FROM Sellers WHERE email = ?",
+            (user_email,)
+        )
+        bank_row = cursor.fetchone()
+        if bank_row:
+            bank_routing = bank_row['bank_routing_number']
+            bank_account = bank_row['bank_account_number']
+            balance = bank_row['balance']
 
     conn.close()
+
     return render_template(
         'settings.html',
         user_email=user_email,
         account_type=account_type_raw,
         cards=cards,
         is_seller=is_seller,
-        bank_routing=bank_row[0] if bank_row else None,
-        bank_account=bank_row[1] if bank_row else None,
-        balance=bank_row[2] if bank_row else None,
+        bank_routing=bank_routing,
+        bank_account=bank_account,
+        balance=balance,
     )
 
 
