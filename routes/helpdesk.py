@@ -1,6 +1,5 @@
 from datetime import datetime
 from flask import Blueprint, flash, redirect, render_template, request, send_file, session, url_for
-
 from utils import *
 
 helpdesk_bp = Blueprint("helpdesk", __name__)

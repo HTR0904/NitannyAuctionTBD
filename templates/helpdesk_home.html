@@ -247,37 +247,16 @@
                     <button type="submit" class="btn btn-navy btn-block">Add Category</button>
                 </form>
                 <div class="table-wrap">
-                    {% macro render_node(node_name, tree_map, level=1) %}
-                        <li class="py-1">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span class="small">{{ "↳ " if level > 1 else "" }}{{ node_name }}</span>
-                                {% if node_name in tree_map %}
-                                    <button class="btn btn-sm btn-link text-navy p-0" type="button" data-toggle="collapse" data-target="#nest-{{ node_name|replace(' ', '-') }}">+</button>
-                                {% endif %}
-                            </div>
-                            {% if node_name in tree_map %}
-                                <div class="collapse nested-tree" id="nest-{{ node_name|replace(' ', '-') }}">
-                                    <ul class="list-unstyled mb-0">
-                                        {% for sub_child in tree_map[node_name] %}
-                                            {{ render_node(sub_child, tree_map, level + 1) }}
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                            {% endif %}
-                        </li>
-                    {% endmacro %}
-                    <div class="accordion" id="catAcc">
+                    <div class="list-unstyled" id="dynamicCatTree">
                         {% for parent in top_categories %}
-                            <div class="card border-0 mb-1">
-                                <div class="card-header bg-light py-2" data-toggle="collapse" data-target="#c-{{ loop.index }}" style="cursor:pointer">
+                            <div class="cat-node">
+                                <div class="d-flex justify-content-between align-items-center py-2 bg-light px-2 mb-1 rounded fetch-children"
+                                     data-category="{{ parent }}" style="cursor:pointer;">
                                     <span class="small font-weight-bold">{{ parent }}</span>
+                                    <button class="btn btn-sm btn-link text-navy p-0 indicator font-weight-bold">+</button>
                                 </div>
-                                <div id="c-{{ loop.index }}" class="collapse">
-                                    <div class="card-body p-2">
-                                        <ul class="list-unstyled mb-0">
-                                            {% if parent in tree_map %}{% for child in tree_map[parent] %}{{ render_node(child, tree_map) }}{% endfor %}{% endif %}
-                                        </ul>
-                                    </div>
+                                <div class="cat-children nested-tree" style="display: none;">
+                                    <ul class="list-unstyled mb-0 children-list"></ul>
                                 </div>
                             </div>
                         {% endfor %}
@@ -385,6 +364,59 @@ $(document).ready(function() {
                 }
             });
         }
+    });
+
+    // Dynamic Category Tree Traversal (for the display panel)
+    $('#dynamicCatTree').on('click', '.fetch-children', function() {
+        var $header = $(this);
+        var category = $header.data('category');
+        var $childrenContainer = $header.next('.cat-children');
+        var $list = $childrenContainer.find('.children-list');
+        var $indicator = $header.find('.indicator');
+
+        // If we've already loaded the children from the database, just toggle visibility
+        if ($header.data('loaded')) {
+            $childrenContainer.slideToggle(200, function() {
+                $indicator.text($childrenContainer.is(':visible') ? '-' : '+');
+            });
+            return;
+        }
+
+        // Show a loading state
+        $indicator.text('...');
+
+        // Dynamically query the database for the next level down
+        $.getJSON('/get_subcategories', { parent: category }, function(data) {
+            $list.empty();
+
+            if (data.subcategories && data.subcategories.length > 0) {
+                data.subcategories.forEach(function(child) {
+                    // Build the HTML for the new subcategory
+                    var childHtml = `
+                        <li class="cat-node mb-1">
+                            <div class="d-flex justify-content-between align-items-center py-1 fetch-children"
+                                 data-category="${child}" style="cursor:pointer;">
+                                <span class="small">${child}</span>
+                                <button class="btn btn-sm btn-link text-navy p-0 indicator font-weight-bold">+</button>
+                            </div>
+                            <div class="cat-children nested-tree" style="display: none;">
+                                <ul class="list-unstyled mb-0 children-list"></ul>
+                            </div>
+                        </li>
+                    `;
+                    $list.append(childHtml);
+                });
+                $indicator.text('-');
+            } else {
+                // No subcategories exist in the database for this node
+                $list.append('<li class="small text-muted py-1">No subcategories</li>');
+                $indicator.text(''); // Remove the + icon since there's nothing to expand
+            }
+
+            // Mark as loaded so we don't query the DB again for this specific node
+            $header.data('loaded', true);
+            $childrenContainer.slideDown(200);
+        });
     });
 });
 </script>

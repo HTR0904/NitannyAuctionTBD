@@ -553,19 +553,13 @@ def collect_helpdesk_context():
         })
 
     # Handle hierarchical Categories
-    raw_categories = conn.execute(
-        "SELECT parent_category, category_name FROM Categories ORDER BY category_name"
+    raw_top_categories = conn.execute(
+        "SELECT category_name FROM Categories WHERE parent_category = 'Root' ORDER BY category_name"
     ).fetchall()
 
-    tree_map = {}
-    for row in raw_categories:
-        parent = row["parent_category"]
-        child = row["category_name"]
-        tree_map.setdefault(parent, []).append(child)
+    top_categories = [row["category_name"] for row in raw_top_categories]
 
-    top_categories = tree_map.get('Root', [])
-
-    # Updated Metrics Query to include Open Tickets and Staff Members
+    # Metrics
     stats = conn.execute(
         """
         SELECT 
@@ -580,7 +574,6 @@ def collect_helpdesk_context():
 
     return {
         "users": users,
-        "tree_map": tree_map,
         "top_categories": top_categories,
         "tickets": tickets,
         "metrics": {
@@ -740,3 +733,71 @@ def build_xlsx_bytes(rows):
         workbook.writestr("xl/sharedStrings.xml", shared_xml)
     output.seek(0)
     return output
+
+# CATEGORY TRANSVERSAL ###################################
+def get_top_categories(cursor):
+    """Fetches all categories that sit directly under 'Root'."""
+    cursor.execute('''
+                   SELECT category_name
+                   FROM Categories
+                   WHERE parent_category = 'Root'
+                   ORDER BY category_name
+                   ''')
+    return [r[0] for r in cursor.fetchall() if r[0]]
+
+
+def get_category_breadcrumbs(cursor, category_name):
+    """Traverses upward from a given category to build a breadcrumb trail."""
+    if not category_name:
+        return []
+
+    breadcrumbs = []
+    current_node = category_name
+
+    while current_node:
+        breadcrumbs.insert(0, current_node)
+        cursor.execute("SELECT parent_category FROM Categories WHERE category_name = ?", (current_node,))
+        row = cursor.fetchone()
+        current_node = row[0] if row and row[0] else None
+
+    return breadcrumbs
+
+
+def get_category_descendants(cursor, category_name):
+    """Uses a BFS queue to find a category and all of its nested subcategories."""
+    if not category_name:
+        return []
+
+    descendants = [category_name]
+    categories_to_check = [category_name]
+
+    while categories_to_check:
+        current = categories_to_check.pop(0)
+        cursor.execute("SELECT category_name FROM Categories WHERE parent_category = ?", (current,))
+        children = [row[0] for row in cursor.fetchall()]
+        descendants.extend(children)
+        categories_to_check.extend(children)
+
+    return descendants
+
+
+def build_category_tree_map(conn):
+    """
+    Fetches all categories and builds an adjacency list (tree map)
+    for rendering full drill-down/accordion menus in templates.
+    Returns the full tree map and a list of top-level categories.
+    """
+    raw_categories = conn.execute(
+        "SELECT parent_category, category_name FROM Categories ORDER BY category_name"
+    ).fetchall()
+
+    tree_map = {}
+    for row in raw_categories:
+        # Assuming row_factory is enabled, so we can access by key
+        parent = row["parent_category"]
+        child = row["category_name"]
+        tree_map.setdefault(parent, []).append(child)
+
+    top_categories = tree_map.get('Root', [])
+
+    return tree_map, top_categories

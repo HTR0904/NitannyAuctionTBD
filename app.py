@@ -459,15 +459,7 @@ def seller():
     seller_email = session['user_email']
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-
-    # Skip the 'Root' root node and fetch its direct children for the starting dropdown
-    cursor.execute('''
-        SELECT category_name 
-        FROM Categories 
-        WHERE parent_category = 'Root' 
-        ORDER BY category_name
-    ''')
-    top_categories = [r[0] for r in cursor.fetchall() if r[0]]
+    top_categories = get_top_categories(cursor)
 
     cursor.execute(
         '''
@@ -802,15 +794,15 @@ def watchlist():
     try:
         # Fetch watched listings with seller identity and bid progress
         cur.execute("""
-            SELECT a.Listing_ID                                          AS listing_id,
-                   a.Seller_Email                                        AS seller_email,
+            SELECT a.Listing_ID AS listing_id,
+                   a.Seller_Email AS seller_email,
                    COALESCE(NULLIF(a.Auction_Title, ''), a.Product_Name) AS title,
-                   a.Product_Name                                        AS product_name,
-                   a.Category                                            AS category,
-                   a.Status                                              AS status_code,
-                   a.Max_bids                                            AS max_bids,
-                   COALESCE(MAX(b.Bid_Price), 0)                         AS current_bid,
-                   COUNT(b.Bid_ID)                                       AS bid_count,
+                   a.Product_Name AS product_name,
+                   a.Category AS category,
+                   a.Status AS status_code,
+                   a.Max_bids AS max_bids,
+                   COALESCE(MAX(b.Bid_Price), 0) AS current_bid,
+                   COUNT(b.Bid_ID) AS bid_count,
                    -- Determine if seller is a Local Vendor or Individual Bidder
                    COALESCE(lv.Business_Name, bdr.first_name || ' ' || bdr.last_name) AS seller_name
             FROM Auction_Listings a
@@ -1011,14 +1003,7 @@ def search():
 
     conn = sql.connect(DB_NAME)
     cursor = conn.cursor()
-
-    cursor.execute('''
-                   SELECT category_name
-                   FROM Categories
-                   WHERE parent_category = 'Root'
-                   ORDER BY category_name
-                   ''')
-    top_categories = [r[0] for r in cursor.fetchall() if r[0]]
+    top_categories = get_top_categories(cursor)
 
     params = []
     where_clauses = []
@@ -1038,22 +1023,8 @@ def search():
         params.extend([kw, kw, kw, kw, kw, kw])
 
     if selected_category:
-        current_node = selected_category
-        while current_node:
-            breadcrumbs.insert(0, current_node)
-            cursor.execute("SELECT parent_category FROM Categories WHERE category_name = ?", (current_node,))
-            row = cursor.fetchone()
-            current_node = row[0] if row and row[0] else None
-
-        descendants = [selected_category]
-        categories_to_check = [selected_category]
-        while categories_to_check:
-            current = categories_to_check.pop(0)
-            cursor.execute("SELECT category_name FROM Categories WHERE parent_category = ?", (current,))
-            children = [row[0] for row in cursor.fetchall()]
-            descendants.extend(children)
-            categories_to_check.extend(children)
-
+        breadcrumbs = get_category_breadcrumbs(cursor, selected_category)
+        descendants = get_category_descendants(cursor, selected_category)
         placeholders = ', '.join(['?'] * len(descendants))
         where_clauses.append(f"al.Category IN ({placeholders})")
         params.extend(descendants)
