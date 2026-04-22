@@ -2,21 +2,27 @@ from datetime import datetime
 from flask import Blueprint, flash, redirect, render_template, request, send_file, session, url_for
 from utils import *
 
+# Helpdesk routes live in their own blueprint so app.py stays focused on the
+# general app routes while this file owns admin tickets, users, categories, and exports.
 helpdesk_bp = Blueprint("helpdesk", __name__)
 
 
 def helpdesk_only():
+    """Return True only when the current session belongs to a logged-in helpdesk user."""
     return "user_email" in session and session.get("account_type") == "/helpdesk"
 
 
 @helpdesk_bp.route("/submit_ticket", methods=["POST"])
 def submit_ticket():
+    """Create a helpdesk ticket from the shared contact/category request form."""
     if "user_email" not in session:
         return redirect("/")
 
     req_type = request.form.get("request_type")
     is_category_form = req_type == "AddCategory"
 
+    # Category requests use two visible fields, but the Requests table stores one
+    # description column, so combine the category name and reason before saving.
     if is_category_form:
         cat_name = request.form.get("cat_name", "").strip()
         cat_reason = request.form.get("cat_reason", "").strip()
@@ -34,21 +40,21 @@ def submit_ticket():
 
 @helpdesk_bp.route("/helpdesk")
 def helpdesk():
+    """Render the dashboard with only relevant tickets and real database summaries."""
     if not helpdesk_only():
         flash("Please log in to continue.", "auth_error")
         return redirect(url_for("index"))
 
-    # Fetch context data from utils
+    # collect_helpdesk_context reads real database tables and filters tickets to
+    # this staff member plus the shared unassigned helpdesk queue.
     context = collect_helpdesk_context()
 
-    # Filter/Flag tickets for the Incoming Queue
-    # Tickets assigned to the team email are marked 'is_unassigned' for the template logic
+    # Mark queue tickets for the template so it can show the "Assign to me" action.
     if "tickets" in context:
         for ticket in context["tickets"]:
             if ticket.get("assigned_email") == DEFAULT_HELPDESK_EMAIL:
                 ticket["is_unassigned"] = True
             else:
-                # If assigned to a specific person, it is no longer unassigned
                 ticket["is_unassigned"] = False
 
     context["current_user"] = get_app_user(session["user_email"])
@@ -59,10 +65,13 @@ def helpdesk():
 
 @helpdesk_bp.route("/helpdesk/create_account", methods=["POST"])
 def create_helpdesk_account_route():
+    """Create a bidder, seller, or helpdesk account through the real account tables."""
     if not helpdesk_only():
         flash("You must be logged in as helpdesk to manage admin tools.", "auth_error")
         return redirect(url_for("index"))
 
+    # The helpdesk form captures first and last name separately for readability,
+    # while the helper accepts one full_name and splits it for the Bidders table.
     f_name = request.form.get("first_name", "").strip()
     l_name = request.form.get("last_name", "").strip()
     full_name = f"{f_name} {l_name}".strip()
@@ -77,6 +86,7 @@ def create_helpdesk_account_route():
 
 @helpdesk_bp.route("/helpdesk/create_category", methods=["POST"])
 def create_category():
+    """Insert a new child category under the selected parent in Categories."""
     if not helpdesk_only():
         return redirect("/")
 
@@ -90,6 +100,7 @@ def create_category():
 
 @helpdesk_bp.route("/helpdesk/update_user", methods=["POST"])
 def update_user():
+    """Update a user's role using the real role membership tables."""
     if not helpdesk_only():
         flash("You must be logged in as helpdesk to update users.", "auth_error")
         return redirect(url_for("index"))
@@ -104,6 +115,7 @@ def update_user():
 
 @helpdesk_bp.route("/helpdesk/update_ticket/<int:ticket_id>", methods=["POST"])
 def update_ticket(ticket_id):
+    """Update ticket status or assignment, including assigning queue tickets to self."""
     if not helpdesk_only():
         flash("You must be logged in as helpdesk to update tickets.", "auth_error")
         return redirect(url_for("index"))
@@ -120,6 +132,7 @@ def update_ticket(ticket_id):
 
 @helpdesk_bp.route("/helpdesk/approve_registration/<int:ticket_id>", methods=["POST"])
 def approve_registration(ticket_id):
+    """Approve a staff registration request by adding the sender to Helpdesk."""
     if not helpdesk_only():
         flash("Unauthorized access.", "danger")
         return redirect(url_for("index"))
@@ -166,6 +179,7 @@ def approve_registration(ticket_id):
 
 @helpdesk_bp.route("/helpdesk/export/<fmt>")
 def export_helpdesk(fmt):
+    """Download the current pseudo database view as CSV or XLSX."""
     if not helpdesk_only():
         flash("You must be logged in as helpdesk to export data.", "auth_error")
         return redirect(url_for("index"))
