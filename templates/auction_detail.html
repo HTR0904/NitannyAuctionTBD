@@ -35,20 +35,41 @@
         <hr>
 
         <div class="row">
-            <div class="{% if session.get('account_type') == '/bidder' %}col-md-7{% else %}col-md-12{% endif %}">
-                <h5>Description</h5>
-                <p>{{ item.description or "No description provided." }}</p>
+            <div class="{% if session.get('account_type') == '/bidder' %}col-md-7{% else %}col-md-9 col-lg-8{% endif %} pr-md-4">
 
-                <p><strong>Category:</strong> {{ item.category or "Uncategorized" }}</p>
-                <p><strong>Seller:</strong> {{ item.seller_name }}</p>
-                <p>
-                    <strong>Seller Rating:</strong>
-                    {% if item.seller_rating %}
-                        {{ item.seller_rating }}/5 from {{ item.rating_count }} rating(s)
-                    {% else %}
-                        No ratings yet
-                    {% endif %}
-                </p>
+                <h5 class="text-navy font-weight-bold mb-3">Description</h5>
+                <div class="p-3 mb-4 rounded" style="background-color: #f8f9fa; border-left: 4px solid #041E42;">
+                    <p class="mb-0" style="line-height: 1.6;">{{ item.description or "No description provided." }}</p>
+                </div>
+
+                <h5 class="text-navy font-weight-bold mb-3">Listing Details</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm table-borderless mb-0">
+                        <tbody>
+                            <tr>
+                                <th class="text-muted pl-0" style="width: 30%;">Category</th>
+                                <td class="font-weight-bold">{{ item.category or "Uncategorized" }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted pl-0">Seller</th>
+                                <td class="font-weight-bold">{{ item.seller_name }}</td>
+                            </tr>
+                            <tr>
+                                <th class="text-muted pl-0 align-middle">Seller Rating</th>
+                                <td>
+                                    {% if item.seller_rating %}
+                                        <span class="badge badge-warning text-dark px-2 py-1" style="font-size: 0.9rem;">
+                                            {{ item.seller_rating }} / 5
+                                        </span>
+                                        <small class="text-muted ml-1">({{ item.rating_count }} rating{% if item.rating_count != 1 %}s{% endif %})</small>
+                                    {% else %}
+                                        <span class="text-muted font-italic">No ratings yet</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             {% if session.get('account_type') == '/bidder' %}
@@ -67,11 +88,13 @@
 
                     {# Added Bids Remaining Display #}
                     {% if item.status_code == 1 %}
-                        <p class="text-info font-weight-bold">Bids remaining: {{ item.max_bids - item.bid_count }}</p>
+                        <p class="mt-2 mb-0">
+                            <span class="badge badge-secondary py-1 px-2 font-weight-bold">Bids remaining: {{ item.max_bids - item.bid_count }}</span>
+                        </p>
                     {% endif %}
 
                     {% if my_bid %}
-                        <p class="mb-0 mt-2"><strong>Your highest bid:</strong> ${{ my_bid }}</p>
+                        <p class="mb-0 mt-3 text-success"><strong>Your highest bid:</strong> ${{ my_bid }}</p>
                     {% endif %}
 
                     <hr>
@@ -128,7 +151,7 @@
 
                         {# Check if the current user is the highest bidder #}
                         {% if my_bid == item.current_bid and my_bid > 0 %}
-                            <div class="alert alert-info text-center">
+                            <div class="alert alert-success text-center border-success">
                                 <strong>Congratulations!</strong> You won this auction.
                             </div>
 

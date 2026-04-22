@@ -175,6 +175,7 @@ def auction_detail(seller_email, listing_id):
         select
             a.Listing_ID as listing_id,
             a.Seller_Email as seller_email,
+            COALESCE(lv.Business_Name, b.first_name || ' ' || b.last_name, a.Seller_Email) as seller_name,
             COALESCE(NULLIF(a.Auction_Title, ''), a.Product_Name) as title,
             a.Product_Name as product_name,
             a.Product_Description as description,
@@ -206,6 +207,8 @@ def auction_detail(seller_email, listing_id):
                 where r.Seller_Email = a.Seller_Email
             ) as rating_count
         from Auction_Listings a
+        LEFT JOIN Local_Vendors lv ON a.Seller_Email = lv.Email
+        LEFT JOIN Bidders b ON a.Seller_Email = b.email
         where a.Listing_ID = ? and a.Seller_Email = ?
     """, (listing_id, seller_email))
     item = cur.fetchone()
@@ -724,85 +727,6 @@ def edit_listing(listing_id):
         flash("A database error occurred.", "listing_error")
     finally:
         conn.close()
-
-    return redirect('/seller#my-listings')
-
-@app.route('/auction_decide/<int:listing_id>', methods=['POST'])
-def auction_decide(listing_id):
-    if 'user_email' not in session or session.get('account_type') != '/seller':
-        return redirect('/')
-
-    seller_email = session['user_email']
-    decision = request.form.get('decision')
-
-    if decision not in ('accept', 'reject'):
-        flash("Invalid decision.", "listing_error")
-        return redirect('/seller#my-listings')
-
-    conn = sql.connect(DB_NAME)
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute(
-            '''
-            SELECT al.Status, al.Auction_Title, al.Product_Name,
-                   (SELECT Bidder_Email FROM Bids
-                    WHERE Listing_ID = al.Listing_ID AND Seller_Email = al.Seller_Email
-                    ORDER BY Bid_Price DESC, Bid_ID DESC LIMIT 1) AS top_bidder,
-                   (SELECT MAX(Bid_Price) FROM Bids
-                    WHERE Listing_ID = al.Listing_ID AND Seller_Email = al.Seller_Email) AS top_bid
-            FROM Auction_Listings al
-            WHERE al.Listing_ID = ? AND al.Seller_Email = ?
-            ''',
-            (listing_id, seller_email)
-        )
-        row = cursor.fetchone()
-
-        if not row:
-            flash("Listing not found.", "listing_error")
-            return redirect('/seller#my-listings')
-
-        status, auction_title, product_name, top_bidder, top_bid = row
-
-        if status != 3:
-            flash("This listing is not pending review.", "listing_error")
-            return redirect('/seller#my-listings')
-
-        title = auction_title or product_name or f"Listing #{listing_id}"
-
-        if decision == 'accept':
-            cursor.execute(
-                "UPDATE Auction_Listings SET Status = 2 WHERE Listing_ID = ? AND Seller_Email = ?",
-                (listing_id, seller_email)
-            )
-            conn.commit()
-            if top_bidder:
-                create_notification(
-                    top_bidder,
-                    f"Good news! The seller accepted your bid of ${top_bid} on '{title}'.",
-                    url_for('auction_detail', seller_email=seller_email, listing_id=listing_id)
-                )
-            flash(f"Accepted the bid for '{title}'. Listing marked as sold.", "listing_success")
-        else:
-            cursor.execute(
-                "UPDATE Auction_Listings SET Status = 0 WHERE Listing_ID = ? AND Seller_Email = ?",
-                (listing_id, seller_email)
-            )
-            conn.commit()
-            if top_bidder:
-                create_notification(
-                    top_bidder,
-                    f"The seller rejected your bid on '{title}'. The auction is now closed.",
-                    url_for('auction_detail', seller_email=seller_email, listing_id=listing_id)
-                )
-            flash(f"Rejected the bid for '{title}'. Listing marked as inactive.", "listing_success")
-    except sql.Error as e:
-        conn.rollback()
-        print(f"Auction decide error: {e}")
-        flash("A database error occurred.", "listing_error")
-    finally:
-        conn.close()
-
     return redirect('/seller#my-listings')
 
 @app.route('/list_product', methods=['POST'])
