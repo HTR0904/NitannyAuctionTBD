@@ -126,7 +126,6 @@ Project_Root/
 ├── dataset_tables.db         # SQLite database file
 ├── README.md                 # Project documentation
 ├── resources.md              # Documentation of resources used for project
-├── setup.md                  # Project setup instructions and guidelines
 ├── utils.py                  # Shared database helper functions
 ├── routes/                   # Route blueprints split out from app.py
 │   ├── __init__.py           # Python package initializer
