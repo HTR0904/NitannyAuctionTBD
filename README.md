@@ -194,7 +194,9 @@ Project_Root/
 ---
 
 ## Instructions on how to initialize database
-
+1. Open dataset_tables and select user_raw
+2. Import hashlib and run "sha256(password)" for each password to get your protected password
+3. Store in seperate table
 
 ## Instructions on how to run the code
 
