@@ -110,9 +110,17 @@ Notifications are connected to the database and can be viewed from the notificat
 
 ### Watchlist
 
-The watchlist feature allows bidders to track auction listings.
-Users can watch or unwatch listings, view all watched listings from the watchlist page,
-and open the auction listing page directly from the watchlist.
+The watchlist feature allows bidders to track specific auction listings and monitor their progress without immediately placing a bid. 
+Bidders can add or remove listings from their watchlist using a toggle button on individual auction detail pages, 
+which then consolidates these tracked items into a dedicated watchlist dashboard. 
+This interface enables users to quickly navigate back to auctions of interest.
+
+`Watchlist` table in the database enables tracking of watcher relationship by mapping the bidder's email to the listing ID and seller email. 
+A template component, `watch_button.html`, handles the UI logic by checking the current watch status and displaying either a "Watching" or "Add to Watchlist" button. 
+When a user interacts with this component `/toggle_watchlist` route handles the database insertions or deletions and provides feedback through success or error flash messages.
+
+The watchlist dashboard provides overview of all auction items and auction status
+Also utilizes  the notification system to ensure watchers receive alerts when a new bid is placed or when a tracked auction officially concludes.
 
 ### Settings
 
